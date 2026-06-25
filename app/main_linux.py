@@ -10,7 +10,7 @@ import json
 import re
 from datetime import datetime
 import tempfile
-import config  # Import the config file
+import config
 import logging
 from logging.handlers import RotatingFileHandler
 import yara
@@ -25,15 +25,12 @@ import shlex
 import traceback
 from functools import lru_cache
 import platform
-
-
-
+import socket
+from queue import Queue
+import weakref
 
 app = Flask(__name__)
 app.secret_key = 'Hermes'
-
-
-
 
 # Load configuration from config.py
 app.config.update(
@@ -47,6 +44,12 @@ app.config.update(
     SSH_USERNAME=config.SSH_USERNAME,
     SSH_PASSWORD=config.SSH_PASSWORD,
     SSH_KEY=config.SSH_KEY,
+    SSH_POOL_MAX_SIZE=config.SSH_POOL_MAX_SIZE,
+    SSH_KEEPALIVE_INTERVAL=config.SSH_KEEPALIVE_INTERVAL,
+    SSH_IDLE_TIMEOUT=config.SSH_IDLE_TIMEOUT,
+    SSH_COMMAND_TIMEOUT=config.SSH_COMMAND_TIMEOUT,
+    SSH_CONNECTION_TIMEOUT=config.SSH_CONNECTION_TIMEOUT,
+    SSH_RETRY_COUNT=config.SSH_RETRY_COUNT,
     Hermes_SCAN_PATHS=config.Hermes_SCAN_PATHS,
     YARA_RULES_DIR=config.YARA_RULES_DIR,
     QUARANTINE_DIR=config.QUARANTINE_DIR,
@@ -60,19 +63,6 @@ app.config.update(
     FAIL2BAN_JAILS=config.FAIL2BAN_JAILS
 )
 
-def log_event(event_type, level, message, details=None):
-    """Log an event to the system log"""
-    event_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log_message = f"{event_time} | {event_type} | {level} | {message} | {details if details else ''}"
-    with open("/tmp/Hermes.log", "a") as log_file:
-        log_file.write(log_message + "\n")
-
-def log_action(action, user_id):
-    """Log an action performed by a user"""
-    log_message = f"User {user_id} performed action: {action}"
-    with open("/var/log/action_logs.log", "a") as log_file:
-        log_file.write(log_message + "\n")
-
 # Initialize extensions
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -80,189 +70,13 @@ login_manager.login_view = 'login'
 bcrypt = Bcrypt(app)
 Session(app)
 
-
-
-class User(UserMixin):
-    """User model for authentication"""
-    def __init__(self, id, username, password, role='user'):
-        self.id = id
-        self.username = username
-        self.password = password
-        self.role = role
-
-# Mock user database
-users = {
-    1: User(1, 'admin', bcrypt.generate_password_hash('admin').decode('utf-8'), 'admin')
-}
-
-class SSHManager:
-    """Manages SSH connections with improved connection handling"""
-    def __init__(self):
-        self.connections = {}  # Initialize the connections dictionary
-    
-    def get_connection(self, host=None, username=None, password=None, key=None, port=None, force_new=False):
-        """Get or create an SSH connection"""
-        # Use config values if parameters are not provided
-        host = host or app.config['SSH_HOST']
-        username = username or app.config['SSH_USERNAME']
-        password = password or app.config['SSH_PASSWORD']
-        key = key or app.config['SSH_KEY']
-        port = port or app.config['SSH_PORT']
-        
-        conn_key = f"{username}@{host}:{port}"
-        
-        if force_new and conn_key in self.connections:
-            self.connections[conn_key].close()
-            del self.connections[conn_key]
-        
-        if conn_key not in self.connections or force_new:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            try:
-                # Disable SSH agent and look for keys to prevent local interference
-                ssh.load_system_host_keys = False
-                
-                if password:
-                    ssh.connect(
-                        hostname=host,
-                        port=port,
-                        username=username,
-                        password=password,
-                        allow_agent=False,
-                        look_for_keys=False,
-                        timeout=10  # Added timeout
-                    )
-                elif key:
-                    if os.path.exists(key):
-                        pkey = paramiko.RSAKey.from_private_key_file(key)
-                    else:
-                        pkey = paramiko.RSAKey.from_private_key(StringIO(key))
-                    ssh.connect(
-                        hostname=host,
-                        port=port,
-                        username=username,
-                        pkey=pkey,
-                        allow_agent=False,
-                        look_for_keys=False,
-                        timeout=10  # Added timeout
-                    )
-                else:
-                    raise ValueError("Either password or key must be provided")
-                
-                self.connections[conn_key] = ssh
-            except Exception as e:
-                error_msg = f"SSH Connection failed to {host}: {str(e)}"
-                app.logger.error(error_msg)
-                if hasattr(app, 'logger'):
-                    app.logger.error(f"SSH Connection details - Host: {host}, User: {username}, Port: {port}")
-                    print(f"SSH Connection details - Host: {host}, User: {username}, Port: {port}")
-                return None
-        
-        return self.connections[conn_key]
-    
-    def close_all(self):
-        """Close all SSH connections"""
-        for conn_key, conn in list(self.connections.items()):
-            try:
-                conn.close()
-            except:
-                pass
-            del self.connections[conn_key]
-
-ssh_manager = SSHManager()
-
-def test_initial_connection():
-    try:
-        conn = ssh_manager.get_connection()
-        if conn:
-            print("Initial SSH connection test successful")
-        else:
-            print("Initial SSH connection test failed")
-    except Exception as e:
-        print(f"Initial SSH connection test error: {str(e)}")
-
-test_initial_connection()
-
-
-def is_connection_alive(ssh):
-    try:
-        transport = ssh.get_transport()
-        return transport and transport.is_active()
-    except:
-        return False
-
-@app.route('/test_ssh')
-@login_required
-def test_ssh():
-    """Test SSH connection and return debug info"""
-    ssh = ssh_manager.get_connection()
-    if not ssh:
-        return jsonify({
-            'status': 'error',
-            'message': 'SSH connection failed',
-            'config': {
-                'host': app.config['SSH_HOST'],
-                'port': app.config['SSH_PORT'],
-                'username': app.config['SSH_USERNAME'],
-                'password_set': bool(app.config['SSH_PASSWORD']),
-                'key_set': bool(app.config['SSH_KEY'])
-            }
-        }), 400
-    
-    # Test a simple command
-    try:
-        stdin, stdout, stderr = ssh.exec_command('echo "SSH Connection Successful"')
-        output = stdout.read().decode().strip()
-        error = stderr.read().decode().strip()
-        
-        return jsonify({
-            'status': 'success',
-            'message': output or error,
-            'connection': str(ssh.get_transport()) if ssh.get_transport() else 'No transport'
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f"Command execution failed: {str(e)}"
-        }), 500
-
-def run_command(cmd, timeout=60, get_pty=False):
-    """Execute command on remote host via SSH with timeout support"""
-    ssh = ssh_manager.get_connection()
-    
-    if not ssh:
-        return "ERROR: Could not establish SSH connection"
-    
-    try:
-        # For sudo commands, use get_pty=True and handle password input
-        if 'sudo' in cmd and app.config['SSH_PASSWORD']:
-            get_pty = True
-        
-        # Set the channel timeout
-        transport = ssh.get_transport()
-        if transport:
-            transport.set_keepalive(30)  # Optional: keep connection alive
-        
-        stdin, stdout, stderr = ssh.exec_command(cmd, timeout=timeout, get_pty=get_pty)
-        
-        # If using sudo with password, send the password via stdin
-        if get_pty and 'sudo' in cmd and app.config['SSH_PASSWORD']:
-            stdin.write(f"{app.config['SSH_PASSWORD']}\n")
-            stdin.flush()
-        
-        output = stdout.read().decode().strip()
-        error = stderr.read().decode().strip()
-        
-        if stdout.channel.recv_exit_status() != 0:
-            return f"ERROR: {error or output}"
-        return output
-    except paramiko.SSHException as e:
-        return f"SSH ERROR: {str(e)}"
-    except Exception as e:
-        return f"EXCEPTION: {str(e)}"
-    
-
+# Logging functions
+def log_event(event_type, level, message, details=None):
+    """Log an event to the system log"""
+    event_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log_message = f"{event_time} | {event_type} | {level} | {message} | {details if details else ''}"
+    with open("/tmp/Hermes.log", "a") as log_file:
+        log_file.write(log_message + "\n")
 
 def log_action(action, user_id=None):
     """Log actions with timestamp and user info"""
@@ -276,7 +90,476 @@ def log_action(action, user_id=None):
     except IOError as e:
         print(f"Failed to write to log file: {str(e)}")
 
-# Authentication Routes
+# User Model
+class User(UserMixin):
+    """User model for authentication"""
+    def __init__(self, id, username, password, role='user'):
+        self.id = id
+        self.username = username
+        self.password = password
+        self.role = role
+
+# Mock user database
+users = {
+    1: User(1, 'admin', bcrypt.generate_password_hash('admin').decode('utf-8'), 'admin')
+}
+
+# ===================================================================
+# OPTIMIZED SSH CONNECTION POOL
+# ===================================================================
+
+class SSHConnectionPool:
+    """Optimized SSH connection pool with keep-alive and connection reuse"""
+    
+    def __init__(self, max_connections=10, keepalive_interval=30, idle_timeout=600):
+        self.max_connections = max_connections
+        self.keepalive_interval = keepalive_interval
+        self.idle_timeout = idle_timeout
+        self.connections = {}
+        self.lock = threading.Lock()
+        self.connection_usage = {}
+        self._start_keepalive_thread()
+        self._start_cleanup_thread()
+    
+    def get_connection(self, host=None, username=None, password=None, key=None, port=None, force_new=False):
+        """Get or create a connection from the pool"""
+        host = host or app.config['SSH_HOST']
+        username = username or app.config['SSH_USERNAME']
+        password = password or app.config['SSH_PASSWORD']
+        key = key or app.config['SSH_KEY']
+        port = port or app.config['SSH_PORT']
+        
+        conn_key = f"{username}@{host}:{port}"
+        
+        with self.lock:
+            # Check if we have an active connection
+            if not force_new and conn_key in self.connections:
+                conn = self.connections[conn_key]
+                if self._is_connection_alive(conn):
+                    self.connection_usage[conn_key] = datetime.now()
+                    return conn
+                else:
+                    # Connection is dead, remove it
+                    self._close_connection(conn_key)
+            
+            # Check if we've reached max connections
+            if len(self.connections) >= self.max_connections:
+                # Remove the oldest unused connection
+                oldest = min(self.connection_usage.items(), key=lambda x: x[1])
+                self._close_connection(oldest[0])
+            
+            # Create new connection
+            conn = self._create_connection(host, port, username, password, key)
+            if conn:
+                self.connections[conn_key] = conn
+                self.connection_usage[conn_key] = datetime.now()
+                return conn
+            return None
+    
+    def _create_connection(self, host, port, username, password, key):
+        """Create a new SSH connection with optimized settings"""
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        try:
+            # Connection parameters optimized for speed
+            connect_kwargs = {
+                'hostname': host,
+                'port': port,
+                'username': username,
+                'timeout': app.config['SSH_CONNECTION_TIMEOUT'],
+                'allow_agent': False,
+                'look_for_keys': False,
+                'compress': True,
+                'auth_timeout': 5
+            }
+            
+            if password:
+                connect_kwargs['password'] = password
+            elif key:
+                if os.path.exists(key):
+                    pkey = paramiko.RSAKey.from_private_key_file(key)
+                else:
+                    pkey = paramiko.RSAKey.from_private_key(StringIO(key))
+                connect_kwargs['pkey'] = pkey
+            else:
+                raise ValueError("Either password or key must be provided")
+            
+            ssh.connect(**connect_kwargs)
+            
+            # Optimize transport settings
+            transport = ssh.get_transport()
+            if transport:
+                transport.set_keepalive(self.keepalive_interval)
+                transport.window_size = 2147483647
+                transport.packetizer.REKEY_BYTES = pow(2, 40)
+                
+                # Set TCP_NODELAY for better performance
+                try:
+                    sock = transport.sock
+                    if sock:
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                except:
+                    pass
+            
+            return ssh
+        except Exception as e:
+            app.logger.error(f"SSH Connection failed to {host}: {str(e)}")
+            try:
+                ssh.close()
+            except:
+                pass
+            return None
+    
+    def _is_connection_alive(self, ssh):
+        """Check if connection is still alive"""
+        try:
+            transport = ssh.get_transport()
+            if not transport or not transport.is_active():
+                return False
+            
+            # Send a no-op to test
+            transport.send_ignore()
+            return True
+        except:
+            return False
+    
+    def _close_connection(self, conn_key):
+        """Close and remove a connection"""
+        if conn_key in self.connections:
+            try:
+                self.connections[conn_key].close()
+            except:
+                pass
+            del self.connections[conn_key]
+        if conn_key in self.connection_usage:
+            del self.connection_usage[conn_key]
+    
+    def _start_keepalive_thread(self):
+        """Start background thread for keepalive"""
+        def keepalive_worker():
+            while True:
+                try:
+                    time.sleep(30)
+                    self._send_keepalive()
+                except:
+                    pass
+        
+        thread = threading.Thread(target=keepalive_worker, daemon=True)
+        thread.start()
+    
+    def _send_keepalive(self):
+        """Send keepalive to all active connections"""
+        with self.lock:
+            for conn_key, conn in list(self.connections.items()):
+                try:
+                    transport = conn.get_transport()
+                    if transport and transport.is_active():
+                        transport.send_ignore()
+                    else:
+                        self._close_connection(conn_key)
+                except:
+                    self._close_connection(conn_key)
+    
+    def _start_cleanup_thread(self):
+        """Start background thread for cleanup"""
+        def cleanup_worker():
+            while True:
+                try:
+                    time.sleep(60)
+                    self._cleanup_idle_connections()
+                except:
+                    pass
+        
+        thread = threading.Thread(target=cleanup_worker, daemon=True)
+        thread.start()
+    
+    def _cleanup_idle_connections(self):
+        """Remove idle connections"""
+        with self.lock:
+            now = datetime.now()
+            to_remove = []
+            
+            for conn_key, usage_time in self.connection_usage.items():
+                if (now - usage_time).total_seconds() > self.idle_timeout:
+                    to_remove.append(conn_key)
+            
+            for conn_key in to_remove:
+                self._close_connection(conn_key)
+    
+    def close_all(self):
+        """Close all connections"""
+        with self.lock:
+            for conn_key in list(self.connections.keys()):
+                self._close_connection(conn_key)
+
+# ===================================================================
+# COMMAND CACHE
+# ===================================================================
+
+class CommandCache:
+    """Cache for command results with TTL"""
+    
+    def __init__(self, ttl=300, max_size=100):
+        self.cache = {}
+        self.ttl = ttl
+        self.max_size = max_size
+        self.lock = threading.Lock()
+    
+    def get(self, key):
+        """Get cached result"""
+        with self.lock:
+            if key in self.cache:
+                result, timestamp = self.cache[key]
+                if time.time() - timestamp < self.ttl:
+                    return result
+                else:
+                    del self.cache[key]
+            return None
+    
+    def set(self, key, value):
+        """Set cached result"""
+        with self.lock:
+            # Clean up if cache is too large
+            if len(self.cache) >= self.max_size:
+                # Remove oldest entries
+                sorted_items = sorted(self.cache.items(), key=lambda x: x[1][1])
+                for old_key, _ in sorted_items[:10]:
+                    del self.cache[old_key]
+            
+            self.cache[key] = (value, time.time())
+    
+    def clear(self):
+        """Clear cache"""
+        with self.lock:
+            self.cache.clear()
+
+# Initialize cache
+command_cache = CommandCache(
+    ttl=app.config.get('CACHE_TTL', 300),
+    max_size=app.config.get('CACHE_MAX_SIZE', 100)
+)
+
+# ===================================================================
+# OPTIMIZED SSH MANAGER
+# ===================================================================
+
+# Initialize connection pool
+ssh_pool = SSHConnectionPool(
+    max_connections=app.config['SSH_POOL_MAX_SIZE'],
+    keepalive_interval=app.config['SSH_KEEPALIVE_INTERVAL'],
+    idle_timeout=app.config['SSH_IDLE_TIMEOUT']
+)
+
+def run_sudo_command(cmd, timeout=60, use_cache=False):
+    """
+    Run a sudo command with proper password handling
+    """
+    # Ensure sudo doesn't ask for password (use the SSH password)
+    if app.config.get('SSH_PASSWORD'):
+        # Use -S flag to read password from stdin
+        cmd = f"echo '{app.config['SSH_PASSWORD']}' | sudo -S {cmd}"
+    
+    return run_command(cmd, timeout=timeout, get_pty=True, use_cache=use_cache)
+
+
+
+
+def run_command(cmd, timeout=60, get_pty=False, use_cache=False, cache_ttl=300):
+    """
+    Execute command with optimized connection management
+    """
+    # For commands that might need bash, explicitly use bash
+    if not cmd.startswith('bash') and not cmd.startswith('sh'):
+        # Only wrap if it's a complex command
+        if any(char in cmd for char in ['|', '&', ';', '<', '>', '`', '$', '"', "'"]):
+            cmd = f"bash -c {shlex.quote(cmd)}"
+    
+    # Check cache if enabled
+    if use_cache:
+        cache_key = f"{cmd}_{timeout}_{get_pty}"
+        cached_result = command_cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+    
+    max_retries = app.config.get('SSH_RETRY_COUNT', 2)
+    last_error = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            ssh = ssh_pool.get_connection(force_new=(attempt > 0))
+            if not ssh:
+                if attempt < max_retries:
+                    time.sleep(0.5)
+                    continue
+                return "ERROR: Could not establish SSH connection"
+            
+            transport = ssh.get_transport()
+            if not transport or not transport.is_active():
+                ssh_pool.get_connection(force_new=True)
+                if attempt < max_retries:
+                    time.sleep(0.5)
+                    continue
+                return "ERROR: SSH transport not active"
+            
+            # For sudo commands with password, use get_pty
+            if 'sudo' in cmd and app.config.get('SSH_PASSWORD'):
+                get_pty = True
+            
+            # Execute command
+            stdin, stdout, stderr = ssh.exec_command(
+                cmd,
+                timeout=timeout,
+                get_pty=get_pty
+            )
+            
+            # Handle sudo password
+            if get_pty and 'sudo' in cmd and app.config.get('SSH_PASSWORD'):
+                stdin.write(f"{app.config['SSH_PASSWORD']}\n")
+                stdin.flush()
+            
+            # Read output
+            output = ""
+            error = ""
+            
+            channel = stdout.channel
+            channel.settimeout(timeout)
+            
+            # Read in chunks
+            while True:
+                try:
+                    data = channel.recv(4096)
+                    if not data:
+                        break
+                    output += data.decode('utf-8', errors='ignore')
+                except paramiko.SSHException:
+                    break
+                except socket.timeout:
+                    break
+            
+            # Read stderr
+            error_data = stderr.read().decode().strip()
+            if error_data:
+                error = error_data
+            
+            # Check exit status
+            exit_status = channel.recv_exit_status()
+            
+            if exit_status != 0:
+                if attempt < max_retries and ("Broken pipe" in error or "Connection" in error):
+                    ssh_pool.get_connection(force_new=True)
+                    time.sleep(0.5)
+                    continue
+                result = f"ERROR: {error or output or 'Command failed with exit code ' + str(exit_status)}"
+                if use_cache:
+                    command_cache.set(cache_key, result)
+                return result
+            
+            result = output.strip() if output else "Success"
+            
+            # Cache result if enabled
+            if use_cache:
+                command_cache.set(cache_key, result)
+            
+            return result
+            
+        except paramiko.SSHException as e:
+            last_error = str(e)
+            if attempt < max_retries:
+                ssh_pool.get_connection(force_new=True)
+                time.sleep(0.5)
+                continue
+        except Exception as e:
+            last_error = str(e)
+            if attempt < max_retries:
+                time.sleep(0.5)
+                continue
+    
+    result = f"ERROR: {last_error or 'Unknown error'}"
+    if use_cache:
+        command_cache.set(cache_key, result)
+    return result
+
+def run_batch_commands(commands, timeout=60, use_cache=False):
+    """
+    Execute multiple commands in a single SSH session
+    
+    Args:
+        commands: List of commands to execute
+        timeout: Overall timeout
+        use_cache: Whether to cache results
+    
+    Returns:
+        List of command outputs
+    """
+    if not commands:
+        return []
+    
+    # Check if all commands are cached
+    if use_cache:
+        cached_results = []
+        all_cached = True
+        for cmd in commands:
+            cache_key = f"{cmd}_{timeout}_False"
+            cached = command_cache.get(cache_key)
+            if cached is not None:
+                cached_results.append(cached)
+            else:
+                all_cached = False
+                break
+        
+        if all_cached:
+            return cached_results
+    
+    # Execute all commands in one session
+    try:
+        ssh = ssh_pool.get_connection()
+        if not ssh:
+            return ["ERROR: Could not establish SSH connection"] * len(commands)
+        
+        # Combine commands with a delimiter
+        delimiter = "\n---CMD_SEPARATOR---\n"
+        combined_cmd = delimiter.join(commands)
+        
+        # Execute combined command
+        stdin, stdout, stderr = ssh.exec_command(
+            combined_cmd,
+            timeout=timeout,
+            get_pty=False
+        )
+        
+        output = stdout.read().decode().strip()
+        error = stderr.read().decode().strip()
+        
+        if error and "ERROR" in error:
+            return [f"ERROR: {error}"] * len(commands)
+        
+        # Split results
+        results = output.split(delimiter)
+        
+        # Ensure we have the right number of results
+        while len(results) < len(commands):
+            results.append("")
+        
+        # Cache results if enabled
+        if use_cache:
+            for cmd, result in zip(commands, results):
+                cache_key = f"{cmd}_{timeout}_False"
+                command_cache.set(cache_key, result)
+        
+        return results[:len(commands)]
+        
+    except Exception as e:
+        return [f"ERROR: {str(e)}"] * len(commands)
+
+def clear_command_cache():
+    """Clear the command cache"""
+    command_cache.clear()
+
+# ===================================================================
+# AUTHENTICATION ROUTES
+# ===================================================================
+
 @login_manager.user_loader
 def load_user(user_id):
     return users.get(int(user_id))
@@ -291,7 +574,6 @@ def login():
         password = request.form.get('password')
         remember = True if request.form.get('remember') else False
         
-        # Input validation
         if not username or not password:
             flash('Please fill in all fields', 'error')
             return redirect(url_for('login'))
@@ -304,20 +586,16 @@ def login():
         
         if user and bcrypt.check_password_hash(user.password, password):
             login_user(user, remember=remember)
-            
-            # Log successful login
             log_action(f"User {username} logged in successfully", user.id)
             log_event("AUTH", "info", "Successful login", {
                 "username": username,
                 "ip": request.remote_addr,
                 "user_agent": request.headers.get('User-Agent')
             })
-            
             flash('Logged in successfully!', 'success')
             next_page = request.args.get('next')
             return redirect(next_page or url_for('dashboard'))
         else:
-            # Log failed attempt
             log_event("AUTH", "warning", "Failed login attempt", {
                 "username": username,
                 "ip": request.remote_addr,
@@ -339,6 +617,171 @@ def logout():
     flash('Logged out successfully!', 'success')
     return redirect(url_for('login'))
 
+# ===================================================================
+# DASHBOARD
+# ===================================================================
+
+@app.route('/')
+@login_required
+def dashboard():
+    """Enhanced Hermes Dashboard with optimized data loading"""
+    now = mydate.datetime.now()
+    
+    if not app.config['SSH_HOST']:
+        flash("Please configure SSH connection first", "error")
+        return redirect(url_for('configure_ssh'))
+    
+    # Initialize with default values
+    system_info = {
+        'hostname': 'Unknown',
+        'os': 'Unknown',
+        'kernel': 'Unknown',
+        'uptime': 'Unknown',
+        'load': 'Unknown',
+        'memory': 'Unknown',
+        'disk': 'Unknown',
+        'cpu': 'Unknown',
+        'cpu_cores': 'Unknown',
+        'last_boot': 'Unknown'
+    }
+    
+    services = {
+        "clamav": {"status": "unknown", "version": "Unknown"},
+        "fail2ban": {"status": "unknown", "jails": "None"},
+        "suricata": {"status": "unknown", "version": "Unknown"},
+        "yara": {"status": "inactive", "version": "Unknown"}
+    }
+    
+    # Get system info with individual commands (safer)
+    try:
+        hostname = run_command("hostname", use_cache=True)
+        if hostname and not hostname.startswith("ERROR"):
+            system_info['hostname'] = hostname
+        
+        os_info = run_command("cat /etc/os-release | grep PRETTY_NAME | cut -d'=' -f2 | tr -d '\"'", use_cache=True)
+        if os_info and not os_info.startswith("ERROR"):
+            system_info['os'] = os_info
+        
+        kernel = run_command("uname -r", use_cache=True)
+        if kernel and not kernel.startswith("ERROR"):
+            system_info['kernel'] = kernel
+        
+        uptime = run_command("uptime -p", use_cache=True)
+        if uptime and not uptime.startswith("ERROR"):
+            system_info['uptime'] = uptime
+        
+        load = run_command("cat /proc/loadavg | awk '{print $1, $2, $3}'", use_cache=True)
+        if load and not load.startswith("ERROR"):
+            system_info['load'] = load
+        
+        memory = run_command("free -h | awk '/Mem:/ {print $3 \"/\" $2}'", use_cache=True)
+        if memory and not memory.startswith("ERROR"):
+            system_info['memory'] = memory
+        
+        disk = run_command("df -h / | awk 'NR==2 {print $3 \"/\" $2}'", use_cache=True)
+        if disk and not disk.startswith("ERROR"):
+            system_info['disk'] = disk
+        
+        cpu = run_command("lscpu | grep 'Model name' | cut -d':' -f2 | sed 's/^[ \t]*//'", use_cache=True)
+        if cpu and not cpu.startswith("ERROR"):
+            system_info['cpu'] = cpu
+        
+        cpu_cores = run_command("nproc", use_cache=True)
+        if cpu_cores and not cpu_cores.startswith("ERROR"):
+            system_info['cpu_cores'] = cpu_cores
+        
+        last_boot = run_command("who -b | awk '{print $3 \" \" $4}'", use_cache=True)
+        if last_boot and not last_boot.startswith("ERROR"):
+            system_info['last_boot'] = last_boot
+    except Exception as e:
+        app.logger.error(f"Error getting system info: {str(e)}")
+    
+    # Get service status with individual commands
+    try:
+        # ClamAV
+        clamav_status = run_sudo_command("systemctl is-active clamav-daemon", use_cache=True)
+        if clamav_status and not clamav_status.startswith("ERROR"):
+            services['clamav']['status'] = clamav_status
+        
+        clamav_version = run_command("clamscan --version | awk '{print $2}'", use_cache=True)
+        if clamav_version and not clamav_version.startswith("ERROR"):
+            services['clamav']['version'] = clamav_version
+        
+        # Fail2Ban
+        fail2ban_status = run_sudo_command("systemctl is-active fail2ban", use_cache=True)
+        if fail2ban_status and not fail2ban_status.startswith("ERROR"):
+            services['fail2ban']['status'] = fail2ban_status
+        
+        fail2ban_jails = run_command("fail2ban-client status | grep 'Jail list' | cut -d':' -f2 | sed 's/^[ \t]*//'", use_cache=True)
+        if fail2ban_jails and not fail2ban_jails.startswith("ERROR"):
+            services['fail2ban']['jails'] = fail2ban_jails
+        
+        # Suricata
+        suricata_status = run_sudo_command("systemctl is-active suricata", use_cache=True)
+        if suricata_status and not suricata_status.startswith("ERROR"):
+            services['suricata']['status'] = suricata_status
+        
+        suricata_version = run_command("suricata --version 2>&1 | head -n1", use_cache=True)
+        if suricata_version and not suricata_version.startswith("ERROR"):
+            services['suricata']['version'] = suricata_version
+        
+        # YARA
+        services['yara']['status'] = "active" if os.path.exists(app.config['YARA_RULES_DIR']) else "inactive"
+        yara_version = run_command("yara --version", use_cache=True)
+        if yara_version and not yara_version.startswith("ERROR"):
+            services['yara']['version'] = yara_version
+    except Exception as e:
+        app.logger.error(f"Error getting service status: {str(e)}")
+    
+    # Get security alerts
+    security_alerts = []
+    try:
+        root_logins = run_command("last root | head -n3", use_cache=True)
+        if root_logins and not root_logins.startswith("ERROR"):
+            for line in root_logins.split('\n'):
+                if line.strip():
+                    security_alerts.append(f"Root login: {line}")
+    except Exception as e:
+        app.logger.error(f"Error getting security alerts: {str(e)}")
+    
+    # Get recent events
+    recent_events = []
+    try:
+        log_file = os.path.join(app.config['LOG_DIR'], 'Hermes_events.log')
+        events_output = run_command(f"tail -n 10 {log_file} 2>/dev/null || echo 'No events found'", use_cache=True)
+        if events_output and not events_output.startswith("ERROR"):
+            recent_events = [line.strip() for line in events_output.split('\n') if line.strip()]
+    except Exception as e:
+        app.logger.error(f"Error reading recent events: {str(e)}")
+    
+    # Get updates info
+    updates_info = {
+        "available": "0",
+        "last_update": "Never"
+    }
+    try:
+        updates = run_command("apt list --upgradable 2>/dev/null | wc -l", use_cache=True)
+        if updates and not updates.startswith("ERROR"):
+            updates_info["available"] = updates.strip()
+        
+        last_update = run_command("stat -c %y /var/lib/apt/periodic/update-success-stamp 2>/dev/null || echo 'Never'", use_cache=True)
+        if last_update and not last_update.startswith("ERROR"):
+            updates_info["last_update"] = last_update.strip()
+    except Exception as e:
+        app.logger.error(f"Error getting updates info: {str(e)}")
+    
+    return render_template('index.html',
+                        system_info=system_info,
+                        services=services,
+                        recent_events=recent_events,
+                        security_alerts=security_alerts,
+                        updates_info=updates_info,
+                        now=now)
+
+# ===================================================================
+# SSH CONFIGURATION
+# ===================================================================
+
 @app.route('/configure_ssh', methods=['GET', 'POST'])
 @login_required
 def configure_ssh():
@@ -346,18 +789,19 @@ def configure_ssh():
         flash('You do not have permission to access this page', 'error')
         return redirect(url_for('dashboard'))
     
-    # Clear existing connections before configuring new ones
-    ssh_manager.close_all()
-
+    # Clear cache when changing SSH config
+    clear_command_cache()
+    
+    # Close all connections before reconfiguring
+    ssh_pool.close_all()
+    
     if request.method == 'POST':
-        # Validate inputs
         ssh_host = request.form.get('ssh_host')
         ssh_port = request.form.get('ssh_port', '22')
         ssh_username = request.form.get('ssh_username')
         ssh_password = request.form.get('ssh_password')
         ssh_key = request.form.get('ssh_key')
         
-        # Basic validation
         if not ssh_host or not ssh_username:
             flash('Host and username are required', 'error')
             return redirect(url_for('configure_ssh'))
@@ -370,7 +814,6 @@ def configure_ssh():
             flash('Invalid port number', 'error')
             return redirect(url_for('configure_ssh'))
         
-        # Update configuration
         app.config.update({
             'SSH_HOST': ssh_host,
             'SSH_PORT': port,
@@ -379,7 +822,7 @@ def configure_ssh():
             'SSH_KEY': ssh_key if ssh_key else app.config['SSH_KEY']
         })
         
-        # Test the connection
+        # Test connection with new settings
         test_result = run_command("echo 'SSH connection test successful'")
         
         if "ERROR" in test_result:
@@ -391,7 +834,7 @@ def configure_ssh():
                 "error": test_result
             })
         else:
-            flash(f"SSH Configuration Successful: {test_result}", "success")
+            flash(f"SSH Configuration Successful", "success")
             log_action("Configured SSH connection", current_user.id)
             log_event("SSH", "info", "SSH configuration updated", {
                 "host": ssh_host,
@@ -407,92 +850,44 @@ def configure_ssh():
                              'username': app.config['SSH_USERNAME']
                          })
 
-
-
-
-
-# Hermes Dashboard
-@app.route('/')
+@app.route('/test_ssh')
 @login_required
-def dashboard():
-    now = mydate.datetime.now()
-    """Enhanced Hermes Dashboard with more system information"""
-    if not app.config['SSH_HOST']:
-        flash("Please configure SSH connection first", "error")
-        return redirect(url_for('configure_ssh'))
+def test_ssh():
+    """Test SSH connection and return debug info"""
+    ssh = ssh_pool.get_connection(force_new=True)
+    if not ssh:
+        return jsonify({
+            'status': 'error',
+            'message': 'SSH connection failed',
+            'config': {
+                'host': app.config['SSH_HOST'],
+                'port': app.config['SSH_PORT'],
+                'username': app.config['SSH_USERNAME'],
+                'password_set': bool(app.config['SSH_PASSWORD']),
+                'key_set': bool(app.config['SSH_KEY'])
+            }
+        }), 400
     
-
-    # Get comprehensive system information
-    system_info = {
-        'hostname': run_command("hostname"),
-        'os': run_command("cat /etc/os-release | grep PRETTY_NAME | cut -d'=' -f2 | tr -d '\"'"),
-        'kernel': run_command("uname -r"),
-        'uptime': run_command("uptime -p"),
-        'load': run_command("cat /proc/loadavg | awk '{print $1, $2, $3}'"),
-        'memory': run_command("free -h | awk '/Mem:/ {print $3 \"/\" $2}'"),
-        'disk': run_command("df -h / | awk 'NR==2 {print $3 \"/\" $2}'"),
-        'cpu': run_command("lscpu | grep 'Model name' | cut -d':' -f2 | sed 's/^[ \t]*//'"),
-        'cpu_cores': run_command("nproc"),
-        'last_boot': run_command("who -b | awk '{print $3 \" \" $4}'")
-    }
-    
-    # Get security services status with more details
-    services = {
-        "clamav": {
-            "status": run_command("systemctl is-active clamav-daemon"),
-            "version": run_command("clamscan --version | awk '{print $2}'")
-        },
-        "fail2ban": {
-            "status": run_command("systemctl is-active fail2ban"),
-            "jails": run_command("fail2ban-client status | grep 'Jail list' | cut -d':' -f2 | sed 's/^[ \t]*//'")
-        },
-        "suricata": {
-            "status": run_command("systemctl is-active suricata"),
-            "version": run_command("suricata --version 2>&1 | head -n1")
-        },
-        "yara": {
-            "status": "active" if os.path.exists(app.config['YARA_RULES_DIR']) else "inactive",
-            "version": run_command("yara --version")
-        }
-    }
-    
-    # Get security alerts and warnings
-    security_alerts = []
-    
-    # Check for root logins
-    root_logins = run_command("last root | head -n5")
-    if root_logins and not root_logins.startswith("ERROR"):
-        security_alerts.extend([f"Root login: {line}" for line in root_logins.split('\n') if line.strip()])
-    
-    # Check for failed logins
-    failed_logins = run_command("grep 'Failed password' /var/log/auth.log | tail -n5")
-    if failed_logins and not failed_logins.startswith("ERROR"):
-        security_alerts.extend([f"Failed login: {line}" for line in failed_logins.split('\n') if line.strip()])
-    
-    # Get recent security events from Hermes log
-    recent_events = []
     try:
-        events_output = run_command(f"tail -n 10 {os.path.join(app.config['LOG_DIR'], 'Hermes_events.log')}")
-        recent_events = [line.strip() for line in events_output.split('\n') if line.strip()]
+        stdin, stdout, stderr = ssh.exec_command('echo "SSH Connection Successful"')
+        output = stdout.read().decode().strip()
+        error = stderr.read().decode().strip()
+        
+        return jsonify({
+            'status': 'success',
+            'message': output or error,
+            'connection': str(ssh.get_transport()) if ssh.get_transport() else 'No transport'
+        })
     except Exception as e:
-        log_event("DASHBOARD", "error", "Failed to read recent events", {"error": str(e)})
-    
-    # Get system updates information
-    updates_info = {
-        "available": run_command("apt list --upgradable 2>/dev/null | wc -l"),
-        "last_update": run_command("stat -c %y /var/lib/apt/periodic/update-success-stamp 2>/dev/null || echo 'Never'")
-    }
-    
-    return render_template('index.html',
-                        system_info=system_info,
-                        services=services,
-                        recent_events=recent_events,
-                        security_alerts=security_alerts,
-                        updates_info=updates_info)
-    
+        return jsonify({
+            'status': 'error',
+            'message': f"Command execution failed: {str(e)}"
+        }), 500
 
+# ===================================================================
+# ANTIVIRUS
+# ===================================================================
 
-# Scanning Functions
 @app.route('/antivirus', methods=['GET', 'POST'])
 @login_required
 def antivirus():
@@ -509,20 +904,13 @@ def antivirus():
                 results['clamav'] = run_command(f"clamscan --remove --recursive --infected --verbose {scan_path}", timeout=600)
 
             if 'maldet' in scanners:
-                # Option 1: Use sudo -S with password (less secure)
-                # results['maldet'] = run_command(f"echo {app.config['SSH_PASSWORD']} | sudo -S /usr/local/sbin/maldet --scan-all {scan_path}", timeout=600)
-                
-                # Option 2: Use get_pty (better)
-                results['maldet'] = run_command(f"sudo /usr/local/sbin/maldet --scan-all {scan_path}", 
-                                              timeout=600, get_pty=True)
+                results['maldet'] = run_command(f"sudo /usr/local/sbin/maldet --scan-all {scan_path}", timeout=600, get_pty=True)
 
             if 'rkhunter' in scanners:
-                results['rkhunter'] = run_command("sudo rkhunter --check --skip-keypress", 
-                                                timeout=300, get_pty=True)
+                results['rkhunter'] = run_command("sudo rkhunter --check --skip-keypress", timeout=300, get_pty=True)
 
             if 'chkrootkit' in scanners:
-                results['chkrootkit'] = run_command("sudo chkrootkit", 
-                                                  timeout=300, get_pty=True)
+                results['chkrootkit'] = run_command("sudo chkrootkit", timeout=300, get_pty=True)
 
             if 'yara' in scanners:
                 yara_rules = request.form.get('yara_rules', '/usr/local/share/yara-rules').strip()
@@ -537,140 +925,66 @@ def antivirus():
     
     return render_template('antivirus.html')
 
-def run_clamav_scan(scan_path):
-    """Run ClamAV scan"""
-    cmd = f"clamscan -r --infected --no-summary {scan_path}"
-    output = run_command(cmd, timeout=600)
+@app.route('/antivirus/results')
+@login_required
+def antivirus_results():
+    """Display antivirus scan results"""
+    tmp_path = session.get('scan_results_path')
+    if not tmp_path or not os.path.exists(tmp_path):
+        flash("No scan results found or results expired.", "error")
+        return redirect(url_for('antivirus'))
     
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    # Parse results
-    infected_files = []
-    for line in output.split('\n'):
-        if 'FOUND' in line:
-            parts = line.split(':', 1)
-            if len(parts) == 2:
-                infected_files.append({
-                    'file': parts[0].strip(),
-                    'detection': parts[1].strip()
-                })
-    
-    return {
-        'status': 'completed',
-        'infected': bool(infected_files),
-        'infected_files': infected_files,
-        'infected_count': len(infected_files),
-        'output': output
-    }
+    try:
+        with open(tmp_path) as f:
+            results = json.load(f)
+        os.unlink(tmp_path)
+        session.pop('scan_results_path', None)
+        
+        formatted_results = "\n\n".join(
+            f"=== {tool.upper()} ===\n{output}" 
+            for tool, output in results.items()
+        )
+        return render_template('antivirus_results.html', results=formatted_results)
+    except Exception as e:
+        flash(f"Error reading scan results: {str(e)}", "error")
+        return redirect(url_for('antivirus'))
 
-def run_maldet_scan(scan_path):
-    """Run Linux Malware Detect (maldet) scan"""
-    # First check if maldet is installed
-    check_cmd = "which maldet"
-    if "ERROR" in run_command(check_cmd):
-        return {'status': 'error', 'error': 'Maldet not installed'}
+@app.route('/antivirus/update')
+@login_required
+def antivirus_update():
+    """Update antivirus databases"""
+    tools = request.args.getlist('tools') or ['clamav', 'maldet', 'rkhunter']
+    results = {}
     
-    # Run the scan
-    cmd = f"maldet --scan-recent {scan_path} --no-color"
-    output = run_command(cmd, timeout=600)
+    try:
+        if 'clamav' in tools:
+            results['clamav'] = run_command("sudo freshclam", timeout=300, get_pty=True)
+        
+        if 'maldet' in tools:
+            results['maldet'] = run_command("sudo /usr/local/sbin/maldet -u", timeout=300, get_pty=True)
+        
+        if 'rkhunter' in tools:
+            results['rkhunter'] = run_command("sudo rkhunter --update", timeout=300, get_pty=True)
+        
+        # Clear cache after updates
+        clear_command_cache()
+        
+        log_action(f"Updated antivirus databases: {', '.join(tools)}")
+        flash("Antivirus update completed", "success")
+        
+    except Exception as e:
+        flash(f"Error during update: {str(e)}", "error")
+        log_action(f"Antivirus update failed: {str(e)}")
     
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    # Parse results
-    infected_files = []
-    detection_summary = ""
-    scan_id = ""
-    
-    for line in output.split('\n'):
-        if 'SCAN ID:' in line:
-            scan_id = line.split('SCAN ID:')[1].strip()
-        elif 'TOTAL HITS:' in line:
-            detection_summary = line.strip()
-        elif scan_id and 'hits:' in line and not line.strip().startswith('['):
-            file_path = line.split('hits:')[0].strip()
-            infected_files.append(file_path)
-    
-    return {
-        'status': 'completed',
-        'infected': bool(infected_files),
-        'scan_id': scan_id,
-        'detection_summary': detection_summary,
-        'infected_files': infected_files,
-        'infected_count': len(infected_files),
-        'output': output
-    }
+    return render_template('antivirus_update.html', 
+                         results=results,
+                         now=datetime.now(),
+                         selected_tools=tools)
 
-def run_rkhunter_scan():
-    """Run Rkhunter scan"""
-    cmd = "rkhunter --check --sk --nocolors"
-    output = run_command(cmd, timeout=600)
-    
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    # Parse results
-    warnings = [line.strip() for line in output.split('\n') if 'Warning:' in line]
-    
-    return {
-        'status': 'completed',
-        'warnings': bool(warnings),
-        'warning_count': len(warnings),
-        'warnings_list': warnings,
-        'output': output
-    }
+# ===================================================================
+# YARA RULES MANAGEMENT
+# ===================================================================
 
-def run_chkrootkit_scan():
-    """Run chkrootkit scan"""
-    cmd = "chkrootkit -q"
-    output = run_command(cmd, timeout=600)
-    
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    # Parse results
-    infected = []
-    for line in output.split('\n'):
-        if any(x in line for x in ['INFECTED', 'Warning', 'Vulnerable']):
-            infected.append(line.strip())
-    
-    return {
-        'status': 'completed',
-        'infected': bool(infected),
-        'infected_count': len(infected),
-        'infected_list': infected,
-        'output': output
-    }
-
-def run_yara_scan(scan_path, rules_path):
-    """Run YARA scan"""
-    cmd = f"yara -r {rules_path}/*.yar {scan_path}"
-    output = run_command(cmd, timeout=600)
-    
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    # Parse results
-    matches = []
-    for line in output.split('\n'):
-        if line.strip():
-            parts = line.split(' ')
-            if len(parts) >= 2:
-                matches.append({
-                    'rule': parts[0],
-                    'file': ' '.join(parts[1:])
-                })
-    
-    return {
-        'status': 'completed',
-        'matches': bool(matches),
-        'match_count': len(matches),
-        'matches_list': matches,
-        'output': output
-    }
-
-# YARA Rules Management
 @app.route('/yara_rules', methods=['GET', 'POST'])
 @login_required
 def manage_yara_rules():
@@ -689,17 +1003,14 @@ def manage_yara_rules():
             flash("Invalid file type - must be .yar or .yara", "error")
             return redirect(url_for('manage_yara_rules'))
         
-        # Upload the file
         try:
             content = file.read().decode('utf-8')
-            # Validate YARA syntax
             try:
                 yara.compile(source=content)
             except yara.SyntaxError as e:
                 flash(f"Invalid YARA syntax: {str(e)}", "error")
                 return redirect(url_for('manage_yara_rules'))
             
-            # Save to remote system
             temp_path = f"/tmp/{file.filename}"
             upload_cmd = f"echo '{content}' > {temp_path} && sudo mv {temp_path} {os.path.join(app.config['YARA_RULES_DIR'], file.filename)}"
             result = run_command(upload_cmd)
@@ -707,6 +1018,8 @@ def manage_yara_rules():
             if "ERROR" in result:
                 flash(f"Failed to upload rule: {result}", "error")
             else:
+                # Clear cache after rule update
+                clear_command_cache()
                 flash("YARA rule uploaded successfully", "success")
                 log_action(f"Uploaded YARA rule: {file.filename}", current_user.id)
                 log_event("YARA", "info", f"New YARA rule uploaded: {file.filename}")
@@ -720,7 +1033,7 @@ def manage_yara_rules():
     # List existing rules
     yara_rules = []
     if app.config['SSH_HOST']:
-        rules_output = run_command(f"ls {app.config['YARA_RULES_DIR']}")
+        rules_output = run_command(f"ls {app.config['YARA_RULES_DIR']}", use_cache=True)
         if rules_output and not rules_output.startswith("ERROR"):
             yara_rules = [rule for rule in rules_output.split('\n') if rule.endswith(('.yar', '.yara'))]
     
@@ -735,7 +1048,6 @@ def delete_yara_rule():
         flash("No rule specified", "error")
         return redirect(url_for('manage_yara_rules'))
     
-    # Security check - prevent path traversal
     if '/' in rule_name or '..' in rule_name:
         flash("Invalid rule name", "error")
         return redirect(url_for('manage_yara_rules'))
@@ -747,157 +1059,32 @@ def delete_yara_rule():
         flash(f"Failed to delete rule: {result}", "error")
         log_event("YARA", "error", f"Failed to delete YARA rule: {rule_name}", {"error": result})
     else:
+        clear_command_cache()
         flash("YARA rule deleted successfully", "success")
         log_action(f"Deleted YARA rule: {rule_name}", current_user.id)
         log_event("YARA", "info", f"YARA rule deleted: {rule_name}")
     
     return redirect(url_for('manage_yara_rules'))
 
-@app.route('/antivirus/update')
-@login_required
-def antivirus_update():
-    """Update antivirus databases with proper sudo password handling"""
-    tools = request.args.getlist('tools') or ['clamav', 'maldet', 'rkhunter']
-    results = {}
-    ssh_password = app.config.get('SSH_PASSWORD', '')
-    
-    try:
-        if 'clamav' in tools:
-            # Using echo to pass password to sudo -S
-            cmd = f"echo '{ssh_password}' | sudo -S freshclam" if ssh_password else "sudo freshclam"
-            results['clamav'] = run_command(cmd, timeout=300, get_pty=True)
-        
-        if 'maldet' in tools:
-            cmd = f"echo '{ssh_password}' | sudo -S /usr/local/sbin/maldet -u" if ssh_password else "sudo /usr/local/sbin/maldet -u"
-            results['maldet'] = run_command(cmd, timeout=300, get_pty=True)
-        
-        if 'rkhunter' in tools:
-            cmd = f"echo '{ssh_password}' | sudo -S rkhunter --update" if ssh_password else "sudo rkhunter --update"
-            results['rkhunter'] = run_command(cmd, timeout=300, get_pty=True)
-        
-        log_action(f"Updated antivirus databases: {', '.join(tools)}")
-        flash("Antivirus update completed", "success")
-        
-    except Exception as e:
-        flash(f"Error during update: {str(e)}", "error")
-        log_action(f"Antivirus update failed: {str(e)}")
-    
-    return render_template('antivirus_update.html', 
-                         results=results,
-                         now=datetime.now(),
-                         selected_tools=tools)
+# ===================================================================
+# PROCESS MONITORING
+# ===================================================================
 
-
-
-
-@app.route('/antivirus/results')
-@login_required
-def antivirus_results():
-    """Display antivirus scan results"""
-    tmp_path = session.get('scan_results_path')
-    if not tmp_path or not os.path.exists(tmp_path):
-        flash("No scan results found or results expired.", "error")
-        return redirect(url_for('antivirus'))
-    
-    try:
-        with open(tmp_path) as f:
-            results = json.load(f)
-        os.unlink(tmp_path)  # Clean up
-        session.pop('scan_results_path', None)
-        
-        formatted_results = "\n\n".join(
-            f"=== {tool.upper()} ===\n{output}" 
-            for tool, output in results.items()
-        )
-        return render_template('antivirus_results.html', results=formatted_results)
-    except Exception as e:
-        flash(f"Error reading scan results: {str(e)}", "error")
-        return redirect(url_for('antivirus'))
-
-
-
-def update_clamav():
-    """Update ClamAV databases"""
-    cmd = "freshclam"
-    output = run_command(cmd, timeout=300)
-    
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    return {
-        'status': 'completed',
-        'output': output
-    }
-
-def update_maldet():
-    """Update Maldet signatures"""
-    # First check if maldet is installed
-    check_cmd = "which maldet"
-    if "ERROR" in run_command(check_cmd):
-        return {'status': 'error', 'error': 'Maldet not installed'}
-    
-    cmd = "maldet --update-ver"
-    output = run_command(cmd, timeout=300)
-    
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    return {
-        'status': 'completed',
-        'output': output
-    }
-
-def update_rkhunter():
-    """Update Rkhunter databases"""
-    cmd = "rkhunter --update"
-    output = run_command(cmd, timeout=300)
-    
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    return {
-        'status': 'completed',
-        'output': output
-    }
-
-def update_yara():
-    """Update YARA rules"""
-    # This would depend on how you manage YARA rules
-    # Here's a simple implementation that pulls from a git repo
-    if not os.path.exists(app.config['YARA_RULES_DIR']):
-        return {'status': 'error', 'error': 'YARA rules directory not found'}
-    
-    cmd = f"cd {app.config['YARA_RULES_DIR']} && git pull origin master"
-    output = run_command(cmd, timeout=300)
-    
-    if "ERROR" in output:
-        return {'status': 'error', 'error': output}
-    
-    return {
-        'status': 'completed',
-        'output': output
-    }
-
-
-
-
-
-# Process Monitoring
 @app.route('/processes')
 @login_required
 def process_monitoring():
-    """Monitor running processes with advanced detection for malicious activities"""
-    ps_output = run_command("ps aux --sort=-%cpu | head -n 20")
+    """Monitor running processes with advanced detection"""
+    ps_output = run_command("ps aux --sort=-%cpu | head -n 30", use_cache=True)
     processes = []
     suspicious_processes = []
 
-    # List of known suspicious commands or patterns
     suspicious_patterns = [
-        "wget", "curl", "bash", "nc", "python", "perl", "php", "python3", "java", "sh", "tar"
+        "wget", "curl", "bash", "nc", "python", "perl", "php", "python3", 
+        "java", "sh", "tar", "miner", "crypto", "xmrig"
     ]
     
     if ps_output and not ps_output.startswith("ERROR"):
-        for line in ps_output.split('\n')[1:]:  # Skip header
+        for line in ps_output.split('\n')[1:]:
             parts = line.split()
             if len(parts) >= 11:
                 user = parts[0]
@@ -914,30 +1101,30 @@ def process_monitoring():
                     'command': command
                 }
                 
-                # Flag suspicious commands
+                # Check for suspicious patterns
                 if any(pattern in command.lower() for pattern in suspicious_patterns):
                     suspicious_processes.append({**process_info, 'reason': 'Suspicious command detected'})
                 
-                # Flag processes with high CPU or memory usage
+                # Check resource usage
                 try:
-                    if float(cpu) > 50.0:  # Flag processes using > 50% CPU
+                    if float(cpu) > 50.0:
                         suspicious_processes.append({**process_info, 'reason': 'High CPU usage'})
-                    elif float(mem) > 50.0:  # Flag processes using > 50% memory
+                    elif float(mem) > 50.0:
                         suspicious_processes.append({**process_info, 'reason': 'High memory usage'})
                 except ValueError:
                     pass
 
-                # Flag processes running as root or unusual users
-                if user in ['root', 'admin', 'system']:
+                if user in ['root', 'admin'] and 'sudo' not in command.lower():
                     suspicious_processes.append({**process_info, 'reason': 'Running with elevated privileges'})
 
                 processes.append(process_info)
     
-    # Store suspicious processes in session for /kill_process to access
     session['suspicious_processes'] = suspicious_processes
     
-    return render_template('processes.html', processes=processes, suspicious_processes=suspicious_processes , current_year=datetime.now().year)
-
+    return render_template('processes.html', 
+                         processes=processes, 
+                         suspicious_processes=suspicious_processes, 
+                         current_year=datetime.now().year)
 
 @app.route('/kill_process', methods=['POST'])
 @login_required
@@ -948,11 +1135,9 @@ def kill_process():
         flash("Invalid PID", "error")
         return redirect(url_for('process_monitoring'))
     
-    # Get the suspicious processes from session
     suspicious_processes = session.get('suspicious_processes', [])
     killed_process_info = None
     
-    # Check if the killed process was flagged as suspicious
     for proc in suspicious_processes:
         if proc['pid'] == pid:
             killed_process_info = proc
@@ -969,20 +1154,19 @@ def kill_process():
         log_action(f"Killed process: {pid}", current_user.id)
         log_event("PROCESS", "warning", f"Process {pid} killed by admin")
         
-        # If it was a suspicious process, log additional details
         if killed_process_info:
-            log_event("PROCESS", "warning", f"Malicious process {pid} killed by admin", killed_process_info)
+            log_event("PROCESS", "warning", f"Malicious process {pid} killed", killed_process_info)
     
     return redirect(url_for('process_monitoring'))
 
+# ===================================================================
+# NETWORK MONITORING
+# ===================================================================
 
-# Network Monitoring
 @app.route('/network')
 @login_required
 def network_monitoring():
     """Monitor network connections and flag malicious ports and IPs"""
-
-    # List of known malicious/suspicious ports
     malicious_ports = {
         '23', '69', '135', '137', '138', '139', '445', '1433', '3306', '4444',
         '5554', '6660', '6661', '6662', '6663', '6664', '6665', '6666', '6667',
@@ -990,7 +1174,6 @@ def network_monitoring():
         '37215', '52869'
     }
 
-    # Load malicious IPs from file
     malicious_ips = set()
     try:
         with open('malware_ips.txt', 'r') as f:
@@ -999,26 +1182,30 @@ def network_monitoring():
                 if ip and not ip.startswith('#'):
                     malicious_ips.add(ip)
     except FileNotFoundError:
-        flash("Malicious IP list not found", "error")
+        pass
 
-    # Get listening ports
-    listen_output = run_command("ss -tulnp")
+    # Use individual commands instead of batch for reliability
     listening = []
     suspicious_listening = []
+    established = []
+    suspicious_established = []
 
+    # Get listening ports
+    listen_output = run_command("ss -tulnp 2>/dev/null", use_cache=True)
     if listen_output and not listen_output.startswith("ERROR"):
         for line in listen_output.split('\n')[1:]:
             parts = line.split()
             if len(parts) >= 6:
                 local_address = parts[4]
                 process = parts[5]
+                # Extract port from local address
                 port = local_address.split(':')[-1]
                 
-                # Extract PID more reliably
                 pid = None
+                # Extract PID from process info
                 if "pid=" in process:
                     pid = process.split('pid=')[1].split(',')[0]
-                elif "," in process:  # Alternative format: "process,1234"
+                elif "," in process:
                     pid = process.split(',')[-1]
                 
                 entry = {
@@ -1027,7 +1214,7 @@ def network_monitoring():
                     'local': local_address,
                     'process': process,
                     'port': port,
-                    'pid': pid  # Add the extracted PID to the entry
+                    'pid': pid
                 }
 
                 if port in malicious_ports:
@@ -1037,10 +1224,7 @@ def network_monitoring():
                 listening.append(entry)
 
     # Get established connections
-    est_output = run_command("ss -tupn")
-    established = []
-    suspicious_established = []
-
+    est_output = run_command("ss -tupn 2>/dev/null", use_cache=True)
     if est_output and not est_output.startswith("ERROR"):
         for line in est_output.split('\n')[1:]:
             parts = line.split()
@@ -1051,11 +1235,10 @@ def network_monitoring():
                 remote_ip = remote_address.split(':')[0]
                 process = parts[6] if len(parts) > 6 else 'N/A'
                 
-                # Extract PID more reliably
                 pid = None
                 if "pid=" in process:
                     pid = process.split('pid=')[1].split(',')[0]
-                elif "," in process:  # Alternative format: "process,1234"
+                elif "," in process:
                     pid = process.split(',')[-1]
                 
                 entry = {
@@ -1080,19 +1263,48 @@ def network_monitoring():
                     suspicious_established.append(entry)
                 established.append(entry)
 
-    return render_template(
-        'network.html',
-        listening=listening,
-        established=established,
-        suspicious_listening=suspicious_listening,
-        suspicious_established=suspicious_established,
-        malicious_ports=malicious_ports,
-        malicious_ips=malicious_ips,
-        current_year=datetime.now().year  # Add this line
-    )
+    return render_template('network.html',
+                         listening=listening,
+                         established=established,
+                         suspicious_listening=suspicious_listening,
+                         suspicious_established=suspicious_established,
+                         malicious_ports=malicious_ports,
+                         malicious_ips=malicious_ips,
+                         current_year=datetime.now().year)
 
+@app.route('/firewall/block_ip', methods=['POST'])
+@login_required
+def block_ip():
+    """Block an IP address using firewall-cmd"""
+    ip = request.form.get('ip')
+    if not ip:
+        return jsonify({'success': False, 'error': 'No IP provided'}), 400
+    
+    try:
+        # Add the IP to firewall
+        cmd = f"sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address={ip} drop'"
+        result = run_command(cmd, get_pty=True)
+        
+        if "ERROR" in result:
+            return jsonify({'success': False, 'error': result}), 500
+        
+        # Reload firewall
+        reload_cmd = "sudo firewall-cmd --reload"
+        reload_result = run_command(reload_cmd, get_pty=True)
+        
+        if "ERROR" in reload_result:
+            return jsonify({'success': False, 'error': reload_result}), 500
+        
+        log_action(f"Blocked IP {ip}", current_user.id)
+        return jsonify({'success': True, 'message': f'IP {ip} blocked successfully'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-# File Integrity Monitoring
+# ===================================================================
+# FILE INTEGRITY
+# ===================================================================
+
 @app.route('/file_integrity', methods=['GET', 'POST'])
 @login_required
 def file_integrity():
@@ -1127,6 +1339,7 @@ def file_integrity():
                 flash(f"Failed to quarantine file: {result}", "error")
                 log_event("FIM", "error", f"Failed to quarantine {file_path}", {"error": result})
             else:
+                clear_command_cache()
                 flash(f"File {file_path} quarantined successfully", "success")
                 log_action(f"Quarantined file: {file_path}", current_user.id)
                 log_event("FIM", "warning", f"File quarantined: {file_path}")
@@ -1137,14 +1350,17 @@ def file_integrity():
     quarantined = []
     if os.path.exists(app.config['QUARANTINE_DIR']):
         cmd = f"ls -la {app.config['QUARANTINE_DIR']}"
-        result = run_command(cmd)
+        result = run_command(cmd, use_cache=True)
         
         if result and not result.startswith("ERROR"):
             quarantined = [line.strip() for line in result.split('\n') if line.strip()]
     
     return render_template('file_integrity.html', quarantined=quarantined)
 
-# Log Management
+# ===================================================================
+# LOG MANAGEMENT
+# ===================================================================
+
 @app.route('/logs')
 @login_required
 def log_management():
@@ -1161,7 +1377,7 @@ def log_management():
     
     if selected_log in log_files:
         cmd = f"tail -n 100 {log_files[selected_log]}"
-        result = run_command(cmd)
+        result = run_command(cmd, use_cache=True)
         
         if result and not result.startswith("ERROR"):
             log_content = [line.strip() for line in result.split('\n') if line.strip()]
@@ -1171,9 +1387,28 @@ def log_management():
                          selected_log=selected_log,
                          log_content=log_content)
 
-# System Services Management
+# ===================================================================
+# SERVICE MANAGEMENT
+# ===================================================================
 
-
+def is_suspicious_service(service_name):
+    """Detect suspicious services based on name patterns"""
+    suspicious_patterns = [
+        r'^\.',
+        r'^[a-z0-9]{12,}\.service$',
+        r'^[A-Z0-9]{8,}\.service$',
+        r'(backdoor|keylogger|reverse_shell|meterpreter|empire|revshell|rat)',
+        r'(malware|exploit|infect|payload|trojan|dropper|bindshell|spysvc)',
+        r'(auditbypass|disablelogs|antiav|rootkit|invis)',
+        r'(hiddenservice|cloak|ghost|undetected)',
+        r'(systemd\d+|init\d+|syslogd\d+)\.service$',
+        r'(ssh\.service\.bak|cron\.service\.disabled|sshd\.1\.service)'
+    ]
+    
+    for pattern in suspicious_patterns:
+        if re.search(pattern, service_name, re.IGNORECASE):
+            return True
+    return False
 
 @app.route('/services', methods=['GET', 'POST'])
 @login_required
@@ -1194,17 +1429,17 @@ def service_management():
             flash("Invalid action", "error")
             return redirect(url_for('service_management'))
 
-        # Sanitize input
         service = shlex.quote(service)
         action = shlex.quote(action)
 
         cmd = f"sudo systemctl {action} {service}"
-        result = run_command(cmd)
+        result = run_command(cmd, get_pty=True)
 
         if "ERROR" in result:
             flash(f"Failed to {action} service: {result}", "error")
             log_event("SERVICE", "error", f"Failed to {action} {service}", {"error": result})
         else:
+            clear_command_cache()
             flash(f"Service {service} {action}ed successfully", "success")
             log_action(f"{action}ed service: {service}", current_user.id)
             log_event("SERVICE", "info", f"Service {service} {action}ed")
@@ -1214,7 +1449,7 @@ def service_management():
     # List all services
     services = []
     cmd = "systemctl list-units --type=service --no-pager --no-legend"
-    result = run_command(cmd)
+    result = run_command(cmd, use_cache=True)
 
     if result and not result.startswith("ERROR"):
         for line in result.split('\n'):
@@ -1229,7 +1464,6 @@ def service_management():
                     is_suspicious = False
                     reason = ""
 
-                    # Check for suspicious name
                     if is_suspicious_service(service_name):
                         is_suspicious = True
                         reason = 'Suspicious service name detected'
@@ -1243,7 +1477,6 @@ def service_management():
                             is_suspicious = True
                             reason = f"Service file loaded from suspicious path: {fragment_path}"
 
-                    # Check unknown but active services
                     allowlist = ["ssh.service", "nginx.service", "apache2.service", "docker.service"]
                     if service_name not in allowlist and active == "active" and sub == "running":
                         is_suspicious = True
@@ -1258,7 +1491,6 @@ def service_management():
                             'reason': reason
                         })
 
-                    # Add all services to list
                     services.append({
                         'name': service_name,
                         'loaded': loaded,
@@ -1268,91 +1500,14 @@ def service_management():
 
     return render_template('services.html', services=services, suspicious_services=suspicious_services, now=now)
 
-
-# ----------------------------
-# Suspicious Service Detector
-# ----------------------------
-
-def is_suspicious_service(service_name):
-    """
-    Heuristics to detect suspicious service names.
-    Expand this logic based on threat intelligence.
-    """
-    suspicious_patterns = [
-        # ⛔ Hidden or dot-prefixed services
-        r'^\.',                                 # Hidden services like `.hidden.service`
-
-        # 🔐 Random or Obfuscated Names
-        r'^[a-z0-9]{12,}\.service$',            # Long hash-like names
-        r'^[A-Z0-9]{8,}\.service$',             # Uppercase encoded-looking names
-
-        # 🕵️ Known masquerading or fake services
-        r'^(kworker|ksoftirqd|kthreadd|rc\.local|dbus|udevd|systemd-update|syslog-ng|acpid)\.service$',
-        r'^(sshd|ntpd|named|crond|networkd|auditd)\.service$',  # Known targets for spoofing
-        r'(sysd|systemd-|systemdd|sshd_|cronjob|dockerd|initd)',  # Close variants of legit names
-
-        # 💥 Malware or backdoor keywords
-        r'(backdoor|keylogger|reverse_shell|meterpreter|empire|revshell|rat)',
-        r'(malware|exploit|infect|payload|trojan|dropper|bindshell|spysvc)',
-
-        # 💾 Suspicious execution paths
-        r'^.*\.service.*(tmp|/home/|/mnt/|/media/|/dev/shm/|/run/user/).*$',  # Service files from unsafe locations
-
-        # 🧠 Indicators of evasion or stealth
-        r'(auditbypass|disablelogs|antiav|rootkit|invis)',
-        r'(hiddenservice|cloak|ghost|undetected)',
-
-        # 🧩 YARA-style naming patterns from threat research
-        r'(xsser|remcos|quasar|nanocore|njrat|darkcomet|cobaltstrike|sliver)',
-
-        # 🛠️ Maliciously re-used system names with typos or extensions
-        r'(systemd\d+|init\d+|syslogd\d+)\.service$',
-        r'(ssh\.service\.bak|cron\.service\.disabled|sshd\.1\.service)'
-    ]
-
-
-    for pattern in suspicious_patterns:
-        if re.search(pattern, service_name, re.IGNORECASE):
-            return True
-    return False
-
-
-
-def is_suspicious_service(service_name):
-    """Detect suspicious services based on name, path, or behavior"""
-    
-    suspicious_keywords = [
-        "malware", "backdoor", "trojan", "random", "worm", "crypt", "exploit"
-    ]
-    
-    # Check for suspicious keywords in the service name
-    if any(keyword in service_name.lower() for keyword in suspicious_keywords):
-        return True
-    
-    # Additional checks (e.g., services running from unusual locations)
-    service_path = f"/etc/systemd/system/{service_name}.service"
-    
-    # Check if the service file exists in non-standard locations (indicative of tampering)
-    if not os.path.exists(service_path):
-        return False
-    
-    # Check for strange file paths or suspicious commands (i.e., services running from temp dirs, etc.)
-    with open(service_path, 'r') as f:
-        content = f.read().lower()
-        if "execstart" in content:
-            exec_start_index = content.find("execstart") + len("execstart") + 1
-            exec_start_command = content[exec_start_index:].splitlines()[0].strip()
-            suspicious_paths = ["/tmp", "/dev/shm", "/var/tmp"]
-            if any(path in exec_start_command for path in suspicious_paths):
-                return True
-    
-    return False
-
+# ===================================================================
+# FIREWALL
+# ===================================================================
 
 @app.route('/firewall', methods=['GET', 'POST'])
 @login_required
 def firewall():
-    """Manage firewall rules with improved error handling and debugging"""
+    """Manage firewall rules"""
     if request.method == 'POST':
         action = request.form.get('action')
         port = request.form.get('port')
@@ -1373,19 +1528,15 @@ def firewall():
 
         try:
             if port:
-                # Clean the port input (remove any spaces or unwanted characters)
                 port = port.strip()
                 
                 if action == "allow":
                     command = f"sudo firewall-cmd --zone={zone} --add-port={port}/tcp --permanent"
-                    log_msg = f"Adding port {port} to zone {zone}"
                 elif action == "deny":
-                    # First verify the port exists and is in the correct format
                     if not re.match(r'^\d+(-\d+)?$', port):
                         flash(f"Invalid port format: {port}. Use single port (80) or range (8000-9000)", "error")
                         return redirect(url_for('firewall'))
                     
-                    # Check if port exists in the zone
                     check_cmd = f"sudo firewall-cmd --zone={zone} --query-port={port}/tcp"
                     port_exists = run_command(check_cmd, get_pty=True)
                     
@@ -1394,34 +1545,19 @@ def firewall():
                         return redirect(url_for('firewall'))
                     
                     command = f"sudo firewall-cmd --zone={zone} --remove-port={port}/tcp --permanent"
-                    log_msg = f"Removing port {port} from zone {zone}"
                 else:
                     raise ValueError("Invalid action")
                 
-                # Execute the command with detailed error handling
                 output = run_command(command, get_pty=True)
                 
-                # Debug output
-                print(f"DEBUG - Command: {command}")
-                print(f"DEBUG - Output: {output}")
-                
-                # Verify the change was applied
-                verify_cmd = f"sudo firewall-cmd --zone={zone} --list-ports"
-                current_ports = run_command(verify_cmd, get_pty=True)
-                
                 if action == "allow":
-                    if port not in current_ports:
-                        raise Exception(f"Failed to add port {port}. Command output: {output}. Current ports: {current_ports}")
                     flash(f"Successfully added port {port} to zone {zone}", "success")
                 elif action == "deny":
-                    if port in current_ports:
-                        raise Exception(f"Failed to remove port {port}. Command output: {output}. Current ports: {current_ports}")
                     flash(f"Successfully removed port {port} from zone {zone}", "success")
                 
-                log_action(f"{log_msg}. Output: {output}")
+                log_action(f"Firewall {action} port {port}")
             
             elif service:
-                # Similar handling for services (unchanged from your original)
                 if action == "allow":
                     command = f"sudo firewall-cmd --zone={zone} --add-service={service} --permanent"
                 elif action == "deny":
@@ -1436,27 +1572,25 @@ def firewall():
                     raise ValueError("Invalid action")
                 
                 output = run_command(command, get_pty=True)
-                log_action(f"Firewall {action} service {service}: {output}")
                 flash(f"Service {service} {action}ed in zone {zone}", "success")
+                log_action(f"Firewall {action} service {service}")
 
-            # Reload firewall with verification
+            # Reload firewall
             reload_output = run_command("sudo firewall-cmd --reload", get_pty=True)
             if "success" not in reload_output.lower():
                 raise Exception(f"Firewall reload failed: {reload_output}")
             
-            print(f"DEBUG - Reload output: {reload_output}")
+            clear_command_cache()
 
         except Exception as e:
             error_msg = str(e)
-            print(f"ERROR - {error_msg}")  # Debug output
             flash(f"Firewall operation failed: {error_msg}", "error")
             log_action(f"Firewall error: {error_msg}")
 
         return redirect(url_for('firewall'))
 
-    # Get firewall status with error handling
+    # Get firewall status
     try:
-        # Get both runtime and permanent configurations
         runtime_status = run_command("sudo firewall-cmd --list-all", get_pty=True)
         permanent_status = run_command("sudo firewall-cmd --list-all --permanent", get_pty=True)
         
@@ -1467,7 +1601,6 @@ def firewall():
     except Exception as e:
         firewall_status = f"Error getting firewall status: {str(e)}"
     
-    # Get current default zone
     try:
         current_zone = run_command("sudo firewall-cmd --get-default-zone", get_pty=True)
     except:
@@ -1477,7 +1610,9 @@ def firewall():
                          firewall_status=firewall_status,
                          current_zone=current_zone)
 
-
+# ===================================================================
+# FAIL2BAN
+# ===================================================================
 
 @app.route('/firewall/fail2ban', methods=['GET', 'POST'])
 @login_required
@@ -1515,7 +1650,6 @@ def fail2ban():
                     flash("All fields are required to create a new jail.", "error")
                     return redirect(url_for('fail2ban'))
                 
-                # Create a simple jail configuration
                 jail_config = f"""
 [{jail}]
 enabled = true
@@ -1526,13 +1660,12 @@ bantime = {bantime}
 findtime = {findtime}
 maxretry = {maxretry}
 """
-                # Write to a new jail file using sudo
                 jail_file = f"/etc/fail2ban/jail.d/{jail}.local"
                 cmd = f"echo '{jail_config}' | sudo tee {jail_file}"
                 output = run_command(cmd, get_pty=True)
                 
-                # Restart fail2ban
                 restart_output = run_command("sudo systemctl restart fail2ban", get_pty=True)
+                clear_command_cache()
                 log_action(f"Fail2Ban created new jail {jail}")
                 flash(f"New jail {jail} created and Fail2Ban restarted", "success")
                 
@@ -1545,15 +1678,15 @@ maxretry = {maxretry}
     
     # Get current Fail2Ban status
     try:
-        status = run_command("sudo fail2ban-client status", get_pty=True)
-        jails_output = run_command("sudo fail2ban-client status | grep 'Jail list:'", get_pty=True)
+        status = run_command("sudo fail2ban-client status", get_pty=True, use_cache=True)
+        jails_output = run_command("sudo fail2ban-client status | grep 'Jail list:'", get_pty=True, use_cache=True)
         jails = jails_output.split(':')[-1].strip().split(', ') if jails_output else []
         
         banned_ips = {}
         for jail in jails:
             jail = jail.strip()
             if jail:
-                ips = run_command(f"sudo fail2ban-client get {jail} banip", get_pty=True)
+                ips = run_command(f"sudo fail2ban-client get {jail} banip", get_pty=True, use_cache=True)
                 banned_ips[jail] = ips.split() if ips else []
         
         return render_template('fail2ban.html', 
@@ -1579,17 +1712,9 @@ def fail2ban_logs():
         flash(f"Error retrieving Fail2Ban logs: {str(e)}", "error")
         return render_template('fail2ban_logs.html', logs="Error loading logs")
 
-
-
-
-
-
-
-## Kernel Management System
-## Find Malicious Modules and All loaded Modules
-
-
-# Kernel Management System - Remote SSH Version
+# ===================================================================
+# KERNEL MODULES
+# ===================================================================
 
 # Cache expiration time (5 minutes)
 CACHE_EXPIRATION = 300
@@ -1597,13 +1722,13 @@ CACHE_EXPIRATION = 300
 def remote_file_exists(path):
     """Check if file exists on remote system"""
     cmd = f"[ -f '{path}' ] && echo 'exists' || echo 'not found'"
-    result = run_command(cmd)
+    result = run_command(cmd, use_cache=True)
     return result == 'exists'
 
 def remote_dir_exists(path):
     """Check if directory exists on remote system"""
     cmd = f"[ -d '{path}' ] && echo 'exists' || echo 'not found'"
-    result = run_command(cmd)
+    result = run_command(cmd, use_cache=True)
     return result == 'exists'
 
 def remote_walk(path):
@@ -1616,10 +1741,8 @@ def remote_walk(path):
         for d in dirs:
             if not d:
                 continue
-            # Get files in directory
             files_cmd = f"find '{d}' -maxdepth 1 -type f -printf '%f\\n' 2>/dev/null"
             files = run_command(files_cmd).split('\n')
-            # Get subdirectories
             subdirs_cmd = f"find '{d}' -maxdepth 1 -type d -printf '%f\\n' 2>/dev/null | tail -n +2"
             subdirs = run_command(subdirs_cmd).split('\n')
             result.append((d, [sd for sd in subdirs if sd], [f for f in files if f]))
@@ -1634,7 +1757,7 @@ def remote_walk(path):
 def remote_stat(path):
     """Get file stats from remote system"""
     cmd = f"stat -c '%a %u %g %s' '{path}' 2>/dev/null"
-    result = run_command(cmd)
+    result = run_command(cmd, use_cache=True)
     if result.startswith("ERROR"):
         return None
     try:
@@ -1651,32 +1774,21 @@ def remote_stat(path):
 @lru_cache(maxsize=1)
 def get_kernel_release():
     """Get kernel release from remote system with caching"""
-    result = run_command("uname -r").strip()
+    result = run_command("uname -r", use_cache=True).strip()
     return result if not result.startswith("ERROR") else "unknown"
 
-def cache_with_expiration(seconds):
-    """Decorator for time-based cache invalidation"""
-    def decorator(func):
-        @lru_cache(maxsize=32)
-        def cached_func(*args, **kwargs):
-            return (func(*args, **kwargs), time.time())
-        
-        def wrapper(*args, **kwargs):
-            result, timestamp = cached_func(*args, **kwargs)
-            if time.time() - timestamp > seconds:
-                cached_func.cache_clear()
-                result, timestamp = cached_func(*args, **kwargs)
-            return result
-        return wrapper
-    return decorator
+@lru_cache(maxsize=32)
+def cached_kernel_data(func, *args, **kwargs):
+    """Decorator for caching kernel data"""
+    def wrapper():
+        return func(*args, **kwargs)
+    return wrapper
 
-@cache_with_expiration(CACHE_EXPIRATION)
-def check_module_signing_cached():
-    """Cached version of module signing check for remote system"""
+def check_module_signing():
+    """Check module signing status"""
     try:
-        # Single command to get all signing info
         cmd = """cat /proc/sys/kernel/module_sig_enforce /proc/sys/kernel/module_sig_all /proc/sys/kernel/modules_disabled 2>/dev/null"""
-        output = run_command(cmd)
+        output = run_command(cmd, use_cache=True)
         
         if output.startswith("ERROR"):
             raise Exception(output)
@@ -1687,7 +1799,7 @@ def check_module_signing_cached():
         else:
             sig_enforce = sig_all = modules_disabled = 'unknown'
         
-        secureboot = run_command("[ -d /sys/firmware/efi/efivars ] && echo 'enabled' || echo 'disabled'")
+        secureboot = run_command("[ -d /sys/firmware/efi/efivars ] && echo 'enabled' || echo 'disabled'", use_cache=True)
         if secureboot.startswith("ERROR"):
             secureboot = 'unknown'
         
@@ -1706,9 +1818,8 @@ def check_module_signing_cached():
             'secureboot': 'unknown'
         }
 
-@cache_with_expiration(CACHE_EXPIRATION)
-def check_module_hijacking_cached():
-    """Optimized module hijacking check with caching for remote system"""
+def check_module_hijacking():
+    """Optimized module hijacking check"""
     vulns = []
     paths_to_check = [
         '/lib/modules',
@@ -1721,7 +1832,6 @@ def check_module_hijacking_cached():
     ]
     
     try:
-        # Check world-writable directories
         for path in paths_to_check:
             if remote_dir_exists(path):
                 for root, dirs, files in remote_walk(path):
@@ -1737,7 +1847,6 @@ def check_module_hijacking_cached():
                                 'owner': f"{stat['uid']}:{stat['gid']}"
                             })
         
-        # Check world-writable files
         config_paths = [
             '/etc/modprobe.d',
             '/run/modprobe.d',
@@ -1765,9 +1874,8 @@ def check_module_hijacking_cached():
         log_event("KERNEL", "error", "Failed to check module hijacking", {'error': str(e)})
         return []
 
-@cache_with_expiration(CACHE_EXPIRATION)
-def get_kernel_config_cached():
-    """Cached kernel config reader for remote system"""
+def get_kernel_config():
+    """Get kernel config"""
     config = {}
     kernel_release = get_kernel_release()
     config_paths = [
@@ -1784,7 +1892,7 @@ def get_kernel_config_cached():
                 else:
                     cmd = f"cat {path}"
                 
-                output = run_command(cmd)
+                output = run_command(cmd, use_cache=True)
                 if not output.startswith("ERROR"):
                     for line in output.split('\n'):
                         if line.startswith('CONFIG_'):
@@ -1792,7 +1900,6 @@ def get_kernel_config_cached():
                             config[key] = val.strip('"')
                     break
         
-        # Filter for important security-related parameters
         important_params = {
             'CONFIG_MODULE_SIG': 'Module signing',
             'CONFIG_MODULE_SIG_FORCE': 'Force module signing',
@@ -1818,23 +1925,20 @@ def get_kernel_config_cached():
         log_event("KERNEL", "error", "Failed to read kernel config", {'error': str(e)})
         return {}
 
-@cache_with_expiration(CACHE_EXPIRATION)
-def get_all_kernel_modules_cached():
-    """Get all kernel modules from remote system"""
+def get_all_kernel_modules():
+    """Get all kernel modules"""
     try:
         kernel_release = get_kernel_release()
         module_dir = f"/lib/modules/{kernel_release}"
         
-        # Get all modules in one command for efficiency
         cmd = f"find {module_dir} -type f \( -name '*.ko' -o -name '*.ko.xz' \) -printf '%p %s\\n' 2>/dev/null"
-        output = run_command(cmd)
+        output = run_command(cmd, use_cache=True)
         
         modules = []
         for line in output.split('\n'):
             if line.strip():
                 try:
                     path, size = line.rsplit(' ', 1)
-                    # Extract module name from filename (remove .ko or .ko.xz)
                     base = os.path.basename(path)
                     module_name = os.path.splitext(os.path.splitext(base)[0])[0]
                     modules.append({
@@ -1843,7 +1947,7 @@ def get_all_kernel_modules_cached():
                         'size': int(size)
                     })
                 except ValueError:
-                    continue  # Skip malformed lines
+                    continue
         
         return modules
         
@@ -1854,13 +1958,11 @@ def get_all_kernel_modules_cached():
         })
         return []
 
-@cache_with_expiration(CACHE_EXPIRATION)
-def get_loaded_kernel_modules_cached():
-    """Get loaded kernel modules from remote system"""
+def get_loaded_kernel_modules():
+    """Get loaded kernel modules"""
     try:
-        # Get basic module info in one command
         cmd = "lsmod | awk 'NR>1 {print $1,$2,$3}'"
-        lsmod_output = run_command(cmd)
+        lsmod_output = run_command(cmd, use_cache=True)
         
         if lsmod_output.startswith("ERROR"):
             raise Exception(lsmod_output)
@@ -1868,7 +1970,6 @@ def get_loaded_kernel_modules_cached():
         modules = []
         module_names = []
         
-        # First parse lsmod output
         for line in lsmod_output.split('\n'):
             if line.strip():
                 parts = line.split()
@@ -1884,26 +1985,22 @@ def get_loaded_kernel_modules_cached():
                     modules.append(module)
                     module_names.append(parts[0])
         
-        # Batch process module info (more efficient than one-by-one)
         if module_names:
-            # Get paths for all modules in one call
+            # Get paths for all modules
             paths_cmd = f"modinfo -F filename {' '.join(module_names)} 2>/dev/null"
-            paths_output = run_command(paths_cmd)
+            paths_output = run_command(paths_cmd, use_cache=True)
             paths = paths_output.split('\n') if paths_output else []
             
-            # Get signature status for all modules in one call
+            # Get signature status
             sig_cmd = f"for m in {' '.join(module_names)}; do modinfo $m | grep -q '^sig_id:' && echo 'signed' || echo 'unsigned'; done 2>/dev/null"
-            sig_output = run_command(sig_cmd)
+            sig_output = run_command(sig_cmd, use_cache=True)
             signatures = sig_output.split('\n') if sig_output else []
             
-            # Update modules with additional info
             for i, module in enumerate(modules):
                 if i < len(paths) and paths[i].strip():
                     module['path'] = paths[i].strip()
                 if i < len(signatures) and signatures[i].strip():
                     module['signature'] = signatures[i].strip()
-                
-                # Check for tainting (once per module)
                 module['tainted'] = check_if_tainted(module['name'])
         
         return modules
@@ -1916,27 +2013,23 @@ def get_loaded_kernel_modules_cached():
         return []
 
 def check_if_tainted(module_name):
-    """Check if a specific module contributes to kernel tainting on remote system"""
+    """Check if a module contributes to kernel tainting"""
     try:
-        taint_output = run_command("cat /proc/sys/kernel/tainted 2>/dev/null")
+        taint_output = run_command("cat /proc/sys/kernel/tainted 2>/dev/null", use_cache=True)
         if taint_output.isdigit():
             taint_flags = int(taint_output)
-            # Flag 11 is for externally-built module (P)
-            # Flag 12 is for unsigned module (F)
             if taint_flags & (1 << 11) or taint_flags & (1 << 12):
-                mod_output = run_command(f"grep -l {module_name} /sys/module/*/taint 2>/dev/null")
+                mod_output = run_command(f"grep -l {module_name} /sys/module/*/taint 2>/dev/null", use_cache=True)
                 return "Yes" if mod_output and not mod_output.startswith("ERROR") else "No"
         return "No"
     except:
         return "Unknown"
 
-@cache_with_expiration(CACHE_EXPIRATION)
-def detect_suspicious_modules_cached():
-    """Detect suspicious kernel modules on remote system"""
+def detect_suspicious_modules():
+    """Detect suspicious kernel modules"""
     try:
-        modules = get_loaded_kernel_modules_cached()
+        modules = get_loaded_kernel_modules()
         
-        # Pre-compiled patterns for better performance
         MALICIOUS_PATTERNS = [
             re.compile(r'rootkit', re.IGNORECASE),
             re.compile(r'backdoor', re.IGNORECASE),
@@ -1962,24 +2055,19 @@ def detect_suspicious_modules_cached():
             name = module.get('name', '').lower()
             path = module.get('path', '').lower()
             
-            # Check against malicious patterns
             for pattern in MALICIOUS_PATTERNS:
                 if pattern.search(name) or pattern.search(path):
                     reasons.append(f"Name/path matches pattern: {pattern.pattern}")
             
-            # Check known vulnerable modules
             if name in VULNERABLE_MODULES:
                 reasons.append("Known vulnerable module")
             
-            # Check module signature
             if module.get('signature') == 'unsigned':
                 reasons.append("Unsigned module")
             
-            # Check module path
             if path and not any(p in path for p in ['/lib/modules/', '/usr/lib/modules/']):
                 reasons.append(f"Unusual module path: {module.get('path')}")
             
-            # Check for hidden modules (not in /proc/modules but loaded)
             if not is_module_in_proc_modules(module['name']):
                 reasons.append("Module hidden from /proc/modules")
             
@@ -2004,45 +2092,41 @@ def detect_suspicious_modules_cached():
         return []
 
 def is_module_in_proc_modules(module_name):
-    """Check if module appears in /proc/modules on remote system"""
+    """Check if module appears in /proc/modules"""
     try:
         cmd = f"grep -q '^{module_name} ' /proc/modules && echo 'yes' || echo 'no'"
-        result = run_command(cmd)
+        result = run_command(cmd, use_cache=True)
         return result == 'yes'
     except:
-        return True  # If we can't check, assume it's visible
+        return True
 
 @app.route('/kernel_modules')
 @login_required
 def manage_kernel_modules():
-    """Kernel module management dashboard with all required data"""
+    """Kernel module management dashboard"""
     now = datetime.now()
-
-    # Load fast components
-    kernel_config = get_kernel_config_cached()
-    loaded_modules = get_loaded_kernel_modules_cached()
-    signing_status = check_module_signing_cached()
-
-    # Don't load heavy data here
+    
+    kernel_config = get_kernel_config()
+    loaded_modules = get_loaded_kernel_modules()
+    signing_status = check_module_signing()
+    
     return render_template('kernel_modules.html',
         loaded_modules=loaded_modules,
         signing_status=signing_status,
-        kernel_config=kernel_config ,
+        kernel_config=kernel_config,
         now=now,
         initial_load=True)
-
 
 @app.route('/api/kernel_modules/full_data')
 @login_required
 def get_full_kernel_data():
     """Endpoint for loading full dataset asynchronously"""
     try:
-        loaded_modules = get_loaded_kernel_modules_cached()
         return jsonify({
-            'all_modules': get_all_kernel_modules_cached(),
-            'suspicious_modules': detect_suspicious_modules_cached(),
-            'hijacking_vulns': check_module_hijacking_cached(),
-            'kernel_config': get_kernel_config_cached()
+            'all_modules': get_all_kernel_modules(),
+            'suspicious_modules': detect_suspicious_modules(),
+            'hijacking_vulns': check_module_hijacking(),
+            'kernel_config': get_kernel_config()
         })
     except Exception as e:
         return jsonify({
@@ -2050,26 +2134,20 @@ def get_full_kernel_data():
             'traceback': traceback.format_exc()
         }), 500
 
+# ===================================================================
+# IDS MANAGEMENT
+# ===================================================================
 
-
-
-
-
-
-
-
-
-# IDS Management 
 @app.route('/ids')
 @login_required
 def ids_dashboard():
-    now = mydate.datetime.now()
     """IDS/IPS Management Dashboard"""
+    now = mydate.datetime.now()
+    
     if not app.config['SSH_HOST']:
         flash("Please configure SSH connection first", "error")
         return redirect(url_for('configure_ssh'))
     
-    # Initialize status dictionary
     status = {
         'enabled': False,
         'running': False,
@@ -2081,27 +2159,23 @@ def ids_dashboard():
     }
     
     try:
-        # Check if Suricata is installed
-        check_installed = run_command("which suricata")
+        check_installed = run_command("which suricata", use_cache=True)
         if "ERROR" in check_installed or not check_installed.strip():
             flash("Suricata is not installed on the remote system", "warning")
             return render_template('ids.html', status=status)
         
-        # Get Suricata version
-        version_output = run_command("suricata -V")
+        version_output = run_command("suricata -V", use_cache=True)
         if version_output and not version_output.startswith("ERROR"):
             version_line = version_output.split('\n')[0]
             status['version'] = version_line.split(' ')[1] if ' ' in version_line else version_line
         
-        # Check if Suricata is running
-        ps_output = run_command("ps aux | grep [s]uricata")
+        ps_output = run_command("ps aux | grep [s]uricata", use_cache=True)
         if ps_output and "suricata" in ps_output:
             status['running'] = True
             status['enabled'] = True
             if "--ips" in ps_output:
                 status['mode'] = 'IPS'
             
-            # Get running interface
             if "-i" in ps_output:
                 try:
                     interface = ps_output.split("-i")[1].split()[0]
@@ -2109,40 +2183,35 @@ def ids_dashboard():
                 except:
                     pass
         
-        # Count rule files
-        rules_output = run_command(f"find {app.config['SURICATA_RULES_DIR']} -name '*.rules' | wc -l")
+        rules_output = run_command(f"find {app.config['SURICATA_RULES_DIR']} -name '*.rules' | wc -l", use_cache=True)
         if rules_output and not rules_output.startswith("ERROR"):
             status['rules_count'] = int(rules_output.strip())
         
-        # Load recent alerts
         status['alerts'] = get_recent_alerts()
         
     except Exception as e:
         flash(f"Error checking Suricata status: {str(e)}", "error")
         log_event("IDS", "error", "Failed to check Suricata status", {"error": str(e)})
     
-    return render_template('ids.html', status=status , now = now)
+    return render_template('ids.html', status=status, now=now)
 
 def get_recent_alerts(limit=50):
     """Get recent alerts from Suricata's eve.json"""
     alerts = []
     eve_log = os.path.join(app.config['SURICATA_LOGS'], 'eve.json')
     
-    # Check if log file exists
     check_cmd = f"test -f {eve_log} && echo exists"
-    if run_command(check_cmd) != "exists":
+    if run_command(check_cmd, use_cache=True) != "exists":
         return alerts
     
-    # Get recent alerts
     cmd = f"tail -n {limit} {eve_log} 2>/dev/null | grep '\"event_type\":\"alert\"'"
-    output = run_command(cmd)
+    output = run_command(cmd, use_cache=True)
     
     if output and not output.startswith("ERROR"):
         for line in output.split('\n'):
             try:
                 alert = json.loads(line)
                 
-                # Standardize alert format
                 standardized = {
                     'timestamp': alert.get('timestamp', ''),
                     'event_type': alert.get('event_type', 'alert'),
@@ -2158,7 +2227,6 @@ def get_recent_alerts(limit=50):
                     }
                 }
                 
-                # Add HTTP info if available
                 if 'http' in alert:
                     standardized['http'] = {
                         'hostname': alert['http'].get('hostname', ''),
@@ -2190,16 +2258,13 @@ def manage_ids_rules():
             return redirect(url_for('ids_dashboard'))
             
         try:
-            # Validate rule name
             if not rule_name.endswith('.rules'):
                 rule_name += '.rules'
             
-            # Security check - prevent path traversal
             if '/' in rule_name or '..' in rule_name:
                 flash("Invalid rule name", "error")
                 return redirect(url_for('ids_dashboard'))
             
-            # Upload the rule file
             temp_path = f"/tmp/{rule_name}"
             upload_cmd = f"echo '{rule_content}' > {temp_path} && sudo mv {temp_path} {os.path.join(app.config['SURICATA_RULES_DIR'], rule_name)}"
             result = run_command(upload_cmd)
@@ -2208,8 +2273,8 @@ def manage_ids_rules():
                 flash(f"Failed to save rule: {result}", "error")
                 log_event("IDS", "error", "Failed to save rule", {"rule": rule_name, "error": result})
             else:
-                # Reload Suricata if running
                 reload_suricata()
+                clear_command_cache()
                 flash("Rule added successfully", "success")
                 log_action(f"Added IDS rule: {rule_name}", current_user.id)
                 log_event("IDS", "info", f"New rule added: {rule_name}")
@@ -2220,10 +2285,9 @@ def manage_ids_rules():
             log_event("IDS", "error", "Rule addition failed", {"error": str(e)})
             return redirect(url_for('ids_dashboard'))
     
-    # GET request - list available rules
     rules = []
     if app.config['SSH_HOST']:
-        rules_output = run_command(f"ls {app.config['SURICATA_RULES_DIR']}/*.rules")
+        rules_output = run_command(f"ls {app.config['SURICATA_RULES_DIR']}/*.rules", use_cache=True)
         if rules_output and not rules_output.startswith("ERROR"):
             rules = [os.path.basename(rule) for rule in rules_output.split('\n') if rule.strip()]
     
@@ -2243,6 +2307,7 @@ def ids_control():
         if action == 'start':
             success = start_suricata(mode == 'ips')
             if success:
+                clear_command_cache()
                 log_action(f"Started Suricata in {mode.upper()} mode", current_user.id)
                 log_event("IDS", "info", f"Suricata started in {mode.upper()} mode")
                 return jsonify({'status': 'success', 'message': 'Suricata started successfully'})
@@ -2253,6 +2318,7 @@ def ids_control():
         elif action == 'stop':
             success = stop_suricata()
             if success:
+                clear_command_cache()
                 log_action("Stopped Suricata", current_user.id)
                 log_event("IDS", "info", "Suricata stopped")
                 return jsonify({'status': 'success', 'message': 'Suricata stopped successfully'})
@@ -2264,6 +2330,7 @@ def ids_control():
             stop_suricata()
             success = start_suricata(mode == 'ips')
             if success:
+                clear_command_cache()
                 log_action(f"Restarted Suricata in {mode.upper()} mode", current_user.id)
                 log_event("IDS", "info", f"Suricata restarted in {mode.upper()} mode")
                 return jsonify({'status': 'success', 'message': 'Suricata restarted successfully'})
@@ -2284,29 +2351,25 @@ def start_suricata(ips_mode=False):
     interface = app.config['SURICATA_INTERFACE']
     
     cmd = f"sudo suricata -c /etc/suricata/suricata.yaml -i {interface} {mode_flag} -D"
-    output = run_command(cmd)
+    output = run_command(cmd, get_pty=True)
     
     if "ERROR" in output:
         return False
     
-    # Verify it's running
-    ps_output = run_command("ps aux | grep [s]uricata")
+    time.sleep(2)
+    ps_output = run_command("ps aux | grep [s]uricata", use_cache=True)
     return ps_output and "suricata" in ps_output
 
 def stop_suricata():
     """Stop Suricata service"""
-    # First try graceful stop
-    output = run_command("sudo pkill -15 suricata")
-    
-    # Wait a bit and check
+    output = run_command("sudo pkill -15 suricata", get_pty=True)
     time.sleep(2)
-    ps_output = run_command("ps aux | grep [s]uricata")
+    ps_output = run_command("ps aux | grep [s]uricata", use_cache=True)
     
     if ps_output and "suricata" in ps_output:
-        # Force kill if needed
-        run_command("sudo pkill -9 suricata")
+        run_command("sudo pkill -9 suricata", get_pty=True)
         time.sleep(1)
-        ps_output = run_command("ps aux | grep [s]uricata")
+        ps_output = run_command("ps aux | grep [s]uricata", use_cache=True)
     
     return not (ps_output and "suricata" in ps_output)
 
@@ -2315,13 +2378,11 @@ def reload_suricata():
     if not app.config['SSH_HOST']:
         return False
     
-    # Check if Suricata is running
-    ps_output = run_command("ps aux | grep [s]uricata")
+    ps_output = run_command("ps aux | grep [s]uricata", use_cache=True)
     if not ps_output or "suricata" not in ps_output:
         return False
     
-    # Send USR2 signal to reload rules
-    output = run_command("sudo pkill -USR2 suricata")
+    output = run_command("sudo pkill -USR2 suricata", get_pty=True)
     return "ERROR" not in output
 
 @app.route('/ids/alerts')
@@ -2339,26 +2400,21 @@ def live_suricata_logs():
     
     def generate():
         try:
-            # Get initial file size
-            size_cmd = f"wc -c < {eve_log}" if run_command(f"test -f {eve_log} && echo exists") == "exists" else "0"
-            current_pos = int(run_command(size_cmd) or 0)
+            size_cmd = f"wc -c < {eve_log}" if run_command(f"test -f {eve_log} && echo exists", use_cache=True) == "exists" else "0"
+            current_pos = int(run_command(size_cmd, use_cache=True) or 0)
             
             while True:
-                # Check if file exists
-                if run_command(f"test -f {eve_log} && echo exists") != "exists":
+                if run_command(f"test -f {eve_log} && echo exists", use_cache=True) != "exists":
                     yield "data: " + json.dumps({'error': 'File not found'}) + "\n\n"
                     time.sleep(5)
                     continue
                 
-                # Get current size
-                new_size = int(run_command(f"wc -c < {eve_log}") or 0)
+                new_size = int(run_command(f"wc -c < {eve_log}", use_cache=True) or 0)
                 
-                # If file was rotated or truncated
                 if new_size < current_pos:
                     current_pos = 0
                 
                 if new_size > current_pos:
-                    # Read new content
                     cmd = f"tail -c +{current_pos + 1} {eve_log} | head -c {new_size - current_pos}"
                     new_content = run_command(cmd)
                     
@@ -2387,16 +2443,15 @@ def update_ids_rules():
         return jsonify({'status': 'error', 'message': 'SSH not configured'}), 400
     
     try:
-        # Pull rules updates
         cmd = "sudo suricata-update"
-        output = run_command(cmd, timeout=300)
+        output = run_command(cmd, timeout=300, get_pty=True)
         
         if "ERROR" in output:
             log_event("IDS", "error", "Failed to update rules", {"error": output})
             return jsonify({'status': 'error', 'message': output})
         
-        # Reload rules if Suricata is running
         reload_suricata()
+        clear_command_cache()
         
         log_action("Updated Suricata rules", current_user.id)
         log_event("IDS", "info", "Rules updated successfully")
@@ -2411,141 +2466,23 @@ def update_ids_rules():
         log_event("IDS", "error", "Rule update failed", {"error": str(e)})
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
-@app.route('/fail2ban')
-@login_required
-def fail2ban_dashboard():
-    """Fail2Ban Management Dashboard"""
-    if not app.config['SSH_HOST']:
-        flash("Please configure SSH connection first", "error")
-        return redirect(url_for('configure_ssh'))
-    
-    status = {
-        'enabled': app.config['FAIL2BAN_ENABLED'],
-        'running': False,
-        'jails': {}
-    }
-    
-    if app.config['FAIL2BAN_ENABLED']:
-        # Check if running
-        ps_output = run_command("ps aux | grep [f]ail2ban-server")
-        if ps_output and "fail2ban-server" in ps_output:
-            status['running'] = True
-        
-        # Get jail status
-        for jail in app.config['FAIL2BAN_JAILS']:
-            result = run_command(f"sudo fail2ban-client status {jail}")
-            if result and not result.startswith("ERROR"):
-                status['jails'][jail] = result
-            else:
-                status['jails'][jail] = 'error'
-    
-    return render_template('fail2ban.html', status=status)
+# ===================================================================
+# MONITORING
+# ===================================================================
 
-@app.route('/fail2ban/control', methods=['POST'])
+@app.route("/monitoring")
 @login_required
-def fail2ban_control():
-    """Start/Stop/Restart Fail2Ban"""
-    action = request.form.get('action')
-    
-    if action == 'start':
-        result = run_command("sudo systemctl start fail2ban")
-        if "ERROR" in result:
-            flash("Failed to start Fail2Ban", "error")
-            log_event("FAIL2BAN", "error", "Failed to start Fail2Ban")
-        else:
-            flash("Fail2Ban started successfully", "success")
-            log_action("Started Fail2Ban", current_user.id)
-            log_event("FAIL2BAN", "info", "Fail2Ban started")
-    elif action == 'stop':
-        result = run_command("sudo systemctl stop fail2ban")
-        if "ERROR" in result:
-            flash("Failed to stop Fail2Ban", "error")
-            log_event("FAIL2BAN", "error", "Failed to stop Fail2Ban")
-        else:
-            flash("Fail2Ban stopped successfully", "success")
-            log_action("Stopped Fail2Ban", current_user.id)
-            log_event("FAIL2BAN", "info", "Fail2Ban stopped")
-    elif action == 'restart':
-        result = run_command("sudo systemctl restart fail2ban")
-        if "ERROR" in result:
-            flash("Failed to restart Fail2Ban", "error")
-            log_event("FAIL2BAN", "error", "Failed to restart Fail2Ban")
-        else:
-            flash("Fail2Ban restarted successfully", "success")
-            log_action("Restarted Fail2Ban", current_user.id)
-            log_event("FAIL2BAN", "info", "Fail2Ban restarted")
+def monitoring():
+    """Redirect to monitoring dashboard"""
+    server_ip = app.config['SSH_HOST']
+    if server_ip:
+        return redirect(f"http://{server_ip}:19999")
     else:
-        flash("Invalid action", "error")
-    
-    return redirect(url_for('fail2ban_dashboard'))
+        return "Server IP could not be determined.", 500
 
-@app.route('/fail2ban/unban', methods=['POST'])
-@login_required
-def fail2ban_unban():
-    """Unban an IP in a Fail2Ban jail"""
-    jail = request.form.get('jail')
-    ip = request.form.get('ip')
-    
-    if not jail or not ip:
-        flash("Jail and IP address are required", "error")
-        return redirect(url_for('fail2ban_dashboard'))
-    
-    result = run_command(f"sudo fail2ban-client set {jail} unbanip {ip}")
-    if "ERROR" in result:
-        flash(f"Failed to unban IP: {result}", "error")
-        log_event("FAIL2BAN", "error", f"Failed to unban {ip} in {jail}", {"error": result})
-    else:
-        flash(f"IP {ip} unbanned from {jail} successfully", "success")
-        log_action(f"Unbanned {ip} from {jail}", current_user.id)
-        log_event("FAIL2BAN", "info", f"IP {ip} unbanned from {jail}")
-    
-    return redirect(url_for('fail2ban_dashboard'))
-
-# Helper functions for Suricata
-def start_suricata(ips_mode=False):
-    """Start Suricata in IDS or IPS mode"""
-    cmd = [
-        'sudo suricata',
-        '-c', os.path.join(app.config['SURICATA_DIR'], 'suricata.yaml'),
-        '-i', app.config['SURICATA_INTERFACE'],
-        '--set', f'default-rule-path={app.config["SURICATA_RULES_DIR"]}',
-        '--set', f'log-dir={app.config["SURICATA_LOGS"]}'
-    ]
-    
-    if ips_mode:
-        cmd.append('--ips')
-    
-    cmd.append('&')  # Run in background
-    result = run_command(' '.join(cmd))
-    
-    return not result.startswith("ERROR")
-
-def stop_suricata():
-    """Stop Suricata"""
-    result = run_command("sudo pkill -9 suricata")
-    return not result.startswith("ERROR")
-
-def reload_suricata():
-    """Reload Suricata rules"""
-    result = run_command("sudo pkill -USR2 suricata")
-    return not result.startswith("ERROR")
-
-
-
-
-# Monitoring                                                                                                                                      
-@app.route("/monitoring")                                                                                                                         
-@login_required                                                                                                                                   
-def monitoring():                                                                                                                                 
-    """Redirect to monitoring dashboard"""                                                                                                        
-    server_ip = app.config['SSH_HOST']                                                                                                            
-    if server_ip:                                                                                                                                 
-        return redirect(f"http://{server_ip}:19999")                                                                                              
-    else:                                                                                                                                         
-        return "Server IP could not be determined.", 500  
-    
-
-
+# ===================================================================
+# WINRM MANAGER (if needed)
+# ===================================================================
 
 class WinRMManager:
     """Manages Windows Remote Management connections"""
@@ -2554,15 +2491,27 @@ class WinRMManager:
     
     def get_session(self, host=None, username=None, password=None, transport=None, force_new=False):
         """Get or create a WinRM session"""
-        host = host or app.config['WINRM_HOST']
-        username = username or app.config['WINRM_USERNAME']
-        password = password or app.config['WINRM_PASSWORD']
-        transport = transport or app.config['WINRM_TRANSPORT']
+        try:
+            import winrm
+        except ImportError:
+            app.logger.error("WinRM module not installed")
+            return None
+        
+        host = host or app.config.get('WINRM_HOST')
+        username = username or app.config.get('WINRM_USERNAME')
+        password = password or app.config.get('WINRM_PASSWORD')
+        transport = transport or app.config.get('WINRM_TRANSPORT', 'ntlm')
+        
+        if not all([host, username, password]):
+            return None
         
         conn_key = f"{username}@{host}"
         
         if force_new and conn_key in self.sessions:
-            self.sessions[conn_key].close()
+            try:
+                self.sessions[conn_key].close()
+            except:
+                pass
             del self.sessions[conn_key]
         
         if conn_key not in self.sessions or force_new:
@@ -2571,7 +2520,7 @@ class WinRMManager:
                     host,
                     auth=(username, password),
                     transport=transport,
-                    server_cert_validation=app.config['WINRM_SERVER_CERT_VALIDATION']
+                    server_cert_validation=app.config.get('WINRM_SERVER_CERT_VALIDATION', 'ignore')
                 )
                 self.sessions[conn_key] = session
             except Exception as e:
@@ -2592,17 +2541,10 @@ class WinRMManager:
 
 winrm_manager = WinRMManager()
 
+# ===================================================================
+# MAIN
+# ===================================================================
 
-
-
-
-
-
-
-
-
-
-# Main
 if __name__ == '__main__':
     # Setup logging
     os.makedirs(app.config['LOG_DIR'], exist_ok=True)
@@ -2619,4 +2561,4 @@ if __name__ == '__main__':
     try:
         app.run(host='0.0.0.0', port=5005, debug=True)
     finally:
-        ssh_manager.close_all()
+        ssh_pool.close_all()

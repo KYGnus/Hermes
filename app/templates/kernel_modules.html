@@ -1,488 +1,1129 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <meta name="description" content="LinuxAV-Solutions Hermes Kernel Modules Management" />
-        <meta name="author" content="LinuxAV-Solutions" />
-        <title>Kernel Modules - LinuxAV-Solutions Hermes</title>
-        <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
-        <link href="../static/css/styles.css" rel="stylesheet" />
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-        <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
-        <style>
-            .security-card {
-                transition: transform 0.3s;
-            }
-            .security-card:hover {
-                transform: translateY(-5px);
-            }
-            .suspicious-module {
-                background-color: rgba(220, 53, 69, 0.1);
-            }
-            .critical-issue {
-                background-color: rgba(220, 53, 69, 0.2);
-            }
-            .module-details {
-                font-family: monospace;
-                white-space: pre-wrap;
-                font-size: 0.85rem;
-            }
-            .signing-status {
-                font-weight: 600;
-            }
-            .signing-valid {
-                color: #1cc88a;
-            }
-            .signing-invalid {
-                color: #e74a3b;
-            }
-            .signing-unknown {
-                color: #f6c23e;
-            }
-        </style>
-    </head>
-    <body class="sb-nav-fixed">
-        <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-            <!-- Navbar Brand-->
-            <a class="navbar-brand ps-3" href="index.html">
-                <i class="fas fa-shield-alt me-2"></i>Hermes
-            </a>
-            <!-- Sidebar Toggle-->
-            <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!">
-                <i class="fas fa-bars"></i>
-            </button>
-            
-            <!-- System Time Display -->
-            <div class="mx-auto text-white" id="system-time">
-                <i class="fas fa-clock me-2"></i>
-                <span id="current-time">{{ now.strftime('%Y-%m-%d %H:%M:%S') }}</span>
-            </div>
-            
-            <!-- Navbar-->
-            </ul>
-        </nav>
-        <div id="layoutSidenav">
-            <div id="layoutSidenav_nav">
-                <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
-                    <div class="sb-sidenav-menu">
-                        <div class="nav">
-                            <div class="sb-sidenav-menu-heading">Core</div>
-                            <a class="nav-link active" href="index.html">
-                                <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
-                                Dashboard
-                            </a>
-                            <div class="sb-sidenav-menu-heading">Security Modules</div>
-                            <a class="nav-link" href="/network">
-                                <div class="sb-nav-link-icon"><i class="fas fa-network-wired"></i></div>
-                                Network Monitoring
-                            </a>
-                            <a class="nav-link" href="/scan">
-                                <div class="sb-nav-link-icon"><i class="fas fa-search"></i></div>
-                                Scan Management
-                            </a>
-                            <a class="nav-link" href="/ids">
-                                <div class="sb-nav-link-icon"><i class="fas fa-shield-virus"></i></div>
-                                IDS/IPS
-                            </a>
-                            <a class="nav-link" href="/firewall">
-                                <div class="sb-nav-link-icon"><i class="fas fa-fire"></i></div>
-                                Firewall
-                            </a>
-                            <a class="nav-link" href="/services">
-                                <div class="sb-nav-link-icon"><i class="fas fa-server"></i></div>
-                                Services
-                            </a>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="Hermes Kernel Modules Management" />
+    <meta name="author" content="Koosha Yeganeh" />
+    <title>Kernel Modules - Hermes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: #f0f4f8;
+            color: #1e293b;
+        }
 
-                            <a class="nav-link" href="/process">    
-                                <div class="sb-nav-link-icon"><i class="fas fa-server"></i></div>
-                                Process
-                            </a>
-                            
-                            <a class="nav-link" href="/manage_users">
-                                <div class="sb-nav-link-icon"><i class="fas fa-users"></i></div>
-                                Manage Users
-                            </a>
-                            <a class="nav-link" href="{{ url_for('manage_kernel_modules') }}">
-                        </div>
-                    </div>
-                    <div class="sb-sidenav-footer">
-                        <div class="small">Developer :</div>
-                            Koosha Yeganeh
-                        <div class="small mt-1">Version: 1.0.0</div>
-                    </div>
-                </nav>
-            </div>
-            <div id="layoutSidenav_content">
-                <main>
-                    <div class="container-fluid px-4">
-                        <h1 class="mt-4">Kernel Modules Management</h1>
-                        <ol class="breadcrumb mb-4">
-                            <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
-                            <li class="breadcrumb-item active">Kernel Modules</li>
-                        </ol>
-                        
-                        <!-- Module Signing Status -->
-                        <div class="row">
-                            <div class="col-xl-6 mb-4">
-                                <div class="card security-card border-left-primary shadow h-100 py-2">
-                                    <div class="card-body">
-                                        <div class="row no-gutters align-items-center">
-                                            <div class="col me-2">
-                                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                                    Module Signing Status</div>
-                                                <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                                    <span class="signing-status {% if signing_status.sig_enforce == '1' %}signing-valid{% else %}signing-invalid{% endif %}">
-                                                        {% if signing_status.sig_enforce == '1' %}Enforced{% else %}Not Enforced{% endif %}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div class="col-auto">
-                                                <i class="fas fa-certificate fa-2x text-gray-300"></i>
-                                            </div>
-                                        </div>
-                                        <div class="mt-2 text-xs text-muted">
-                                            Secure Boot: 
-                                            <span class="font-weight-bold {% if signing_status.secureboot == 'enabled' %}text-success{% else %}text-warning{% endif %}">
-                                                {{ signing_status.secureboot|capitalize }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-xl-6 mb-4">
-                                <div class="card security-card border-left-danger shadow h-100 py-2">
-                                    <div class="card-body">
-                                        <div class="row no-gutters align-items-center">
-                                            <div class="col me-2">
-                                                <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                                    All Modules</div>
-                                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="suspicious-modules-count">
-                                                    {{ suspicious_modules|length }}
-                                                </div>
-                                            </div>
-                                            <div class="col-auto">
-                                                <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
-                                            </div>
-                                        </div>
-                                        <div class="mt-2 text-xs text-muted">
-                                            {% if hijacking_vulns %}
-                                            <span class="text-danger me-2">
-                                                <i class="fas fa-exclamation-circle"></i> {{ hijacking_vulns|length }} vulnerabilities
-                                            </span>
-                                            {% else %}
-                                            <span class="text-success">
-                                                <i class="fas fa-check-circle"></i> No hijacking vulnerabilities
-                                            </span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Suspicious Modules -->
+        /* Sidebar */
+        .sidebar {
+            background: #ffffff;
+            min-height: 100vh;
+            padding: 1.5rem 0;
+            border-right: 1px solid #e2e8f0;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.04);
+        }
 
-                        
-                        <!-- Module Hijacking Vulnerabilities -->
-                        {% if hijacking_vulns %}
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-warning text-dark">
-                                <h6 class="m-0 font-weight-bold">
-                                    <i class="fas fa-bug me-2"></i>Module Hijacking Vulnerabilities ({{ hijacking_vulns|length }})
-                                </h6>
-                                <div class="dropdown no-arrow">
-                                    <a class="dropdown-toggle text-dark" href="#" role="button" id="dropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-ellipsis-v fa-sm fa-fw"></i>
-                                    </a>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuLink">
-                                        <li><a class="dropdown-item" href="#" onclick="fixAllVulnerabilities()"><i class="fas fa-wrench me-1"></i> Fix All</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-hover table-sm" width="100%" cellspacing="0">
-                                        <thead class="bg-light">
-                                            <tr>
-                                                <th>Path</th>
-                                                <th>Issue</th>
-                                                <th>Severity</th>
-                                                <th>Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for vuln in hijacking_vulns %}
-                                            <tr class="{% if vuln.severity == 'critical' %}critical-issue{% endif %}">
-                                                <td>{{ vuln.path }}</td>
-                                                <td>{{ vuln.issue }}</td>
-                                                <td>
-                                                    <span class="badge {% if vuln.severity == 'critical' %}bg-danger{% else %}bg-warning{% endif %}">
-                                                        {{ vuln.severity }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary" onclick="fixVulnerability('{{ vuln.path }}')">
-                                                        <i class="fas fa-wrench me-1"></i> Fix
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Loaded Modules -->
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-primary text-white">
-                                <h6 class="m-0 font-weight-bold">
-                                    <i class="fas fa-microchip me-2"></i>Loaded Kernel Modules ({{ loaded_modules|length }})
-                                </h6>
-                                <div class="dropdown no-arrow">
-                                    <a class="dropdown-toggle text-white" href="#" role="button" id="dropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-ellipsis-v fa-sm fa-fw"></i>
-                                    </a>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuLink">
-                                        <li><a class="dropdown-item" href="#" onclick="refreshModules()"><i class="fas fa-sync-alt me-1"></i> Refresh</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-hover table-sm" width="100%" cellspacing="0">
-                                        <thead class="bg-light">
-                                            <tr>
-                                                <th>Module</th>
-                                                <th>Size</th>
-                                                <th>References</th>
-                                                <th>Signature</th>
-                                                <th>Status</th>
-                                                <th>Path</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for module in loaded_modules %}
-                                            <tr>
-                                                <td>{{ module.name }}</td>
-                                                <td>{{ module.size }} bytes</td>
-                                                <td>{{ module.refcount }}</td>
-                                                <td>
-                                                    <span class="badge {% if module.signature == 'signed' %}bg-success{% else %}bg-danger{% endif %}">
-                                                        {{ module.signature }}
-                                                    </span>
-                                                </td>
-                                                <td>{{ module.status }}</td>
-                                                <td><small>{{ module.path }}</small></td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-danger" onclick="unloadModule('{{ module.name }}')">
-                                                        <i class="fas fa-times-circle me-1"></i> Unload
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- All Available Modules -->
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-secondary text-white">
-                                <h6 class="m-0 font-weight-bold">
-                                    <i class="fas fa-box-open me-2"></i>All Available Modules ({{ all_modules|length }})
-                                </h6>
-                                <div class="dropdown no-arrow">
-                                    <a class="dropdown-toggle text-white" href="#" role="button" id="dropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-ellipsis-v fa-sm fa-fw"></i>
-                                    </a>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuLink">
-                                        <li><a class="dropdown-item" href="#" onclick="refreshModules()"><i class="fas fa-sync-alt me-1"></i> Refresh</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-group mb-3">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" id="moduleSearch" placeholder="Search modules...">
-                                        <button class="btn btn-primary" type="button" onclick="searchModules()">
-                                            <i class="fas fa-search"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-hover table-sm" width="100%" cellspacing="0">
-                                        <thead class="bg-light">
-                                            <tr>
-                                                <th>Module</th>
-                                                <th>Size</th>
-                                                <th>Loaded</th>
-                                                <th>Path</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="moduleTable">
-                                            {% for module in all_modules %}
-                                            <tr>
-                                                <td>{{ module.name }}</td>
-                                                <td>{{ module.size }} bytes</td>
-                                                <td>
-                                                    {% if module.loaded %}
-                                                    <span class="badge bg-success">Yes</span>
-                                                    {% else %}
-                                                    <span class="badge bg-secondary">No</span>
-                                                    {% endif %}
-                                                </td>
-                                                <td><small>{{ module.path }}</small></td>
-                                                <td>
-                                                    {% if not module.loaded %}
-                                                    <button class="btn btn-sm btn-outline-success" onclick="loadModule('{{ module.name }}')">
-                                                        <i class="fas fa-play me-1"></i> Load
-                                                    </button>
-                                                    {% endif %}
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Kernel Configuration -->
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-info text-white">
-                                <h6 class="m-0 font-weight-bold">
-                                    <i class="fas fa-cog me-2"></i>Kernel Security Configuration
-                                </h6>
-                                <div class="dropdown no-arrow">
-                                    <a class="dropdown-toggle text-white" href="#" role="button" id="dropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-ellipsis-v fa-sm fa-fw"></i>
-                                    </a>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownMenuLink">
-                                        <li><a class="dropdown-item" href="#" onclick="refreshConfig()"><i class="fas fa-sync-alt me-1"></i> Refresh</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-hover table-sm" width="100%" cellspacing="0">
-                                        <thead class="bg-light">
-                                            <tr>
-                                                <th>Parameter</th>
-                                                <th>Value</th>
-                                                <th>Security Impact</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for param, value in kernel_config.items() %}
-                                            <tr>
-                                                <td>{{ param }}</td>
-                                                <td>
-                                                    {% if value == 'y' or value == 'Y' %}
-                                                    <span class="badge bg-success">Enabled</span>
-                                                    {% elif value == 'n' or value == 'N' %}
-                                                    <span class="badge bg-danger">Disabled</span>
-                                                    {% else %}
-                                                    {{ value }}
-                                                    {% endif %}
-                                                </td>
-                                                <td>
-                                                    {% if value == 'y' or value == 'Y' %}
-                                                        {% if 'DISABLE' in param or 'NO' in param %}
-                                                        <span class="badge bg-danger">Negative</span>
-                                                        {% else %}
-                                                        <span class="badge bg-success">Positive</span>
-                                                        {% endif %}
-                                                    {% else %}
-                                                        {% if 'DISABLE' in param or 'NO' in param %}
-                                                        <span class="badge bg-success">Positive</span>
-                                                        {% else %}
-                                                        <span class="badge bg-danger">Negative</span>
-                                                        {% endif %}
-                                                    {% endif %}
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </main>
-                <footer class="py-4 bg-light mt-auto">
-                    <div class="container-fluid px-4">
-                        <div class="d-flex align-items-center justify-content-between small">
-                            <div class="text-muted">Copyright &copy; LinuxAV-Solutions {{ year }}</div>
-                            <div>
-                                <span class="me-2">Hermes Version: {{ version }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </footer>
-            </div>
-        </div>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-        <script src="../static/js/scripts.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/umd/simple-datatables.min.js" crossorigin="anonymous"></script>
-        <script>
-            // Load heavy data asynchronously after page load
-            document.addEventListener('DOMContentLoaded', function() {
-                updateSystemTime();
-                
-                // Only load heavy data if this is initial load
-                if ({{ 'true' if initial_load else 'false' }}) {
-                    loadHeavyData();
-                }
-            });
-        
-            function loadHeavyData() {
-                showLoadingIndicator();
-                
-                axios.get('/api/kernel_modules/full_data')
-                    .then(response => {
-                        // Update tables with new data
-                        updateSuspiciousModulesTable(response.data.suspicious_modules);
-                        updateAllModulesTable(response.data.all_modules);
-                        updateVulnerabilitiesTable(response.data.hijacking_vulns);
-                        updateKernelConfigTable(response.data.kernel_config);
-                        
-                        hideLoadingIndicator();
-                    })
-                    .catch(error => {
-                        console.error('Error loading full data:', error);
-                        hideLoadingIndicator();
-                        alert('Failed to load full dataset');
-                    });
-            }
-        
-            function showLoadingIndicator() {
-                document.getElementById('loading-overlay').style.display = 'block';
-            }
-        
-            function hideLoadingIndicator() {
-                document.getElementById('loading-overlay').style.display = 'none';
-            }
-        
-            // Add this to your CSS
-            #loading-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                z-index: 9999;
+        .sidebar-brand {
+            padding: 0 1.5rem 2rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-brand h2 {
+            color: #1e293b;
+            font-weight: 800;
+            font-size: 1.8rem;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-brand h2 i {
+            color: #3b82f6;
+            margin-right: 10px;
+        }
+
+        .sidebar-brand small {
+            color: #64748b;
+            font-size: 0.75rem;
+            display: block;
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+
+        .nav-item {
+            margin: 0.25rem 0.75rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-item:hover {
+            background: #f1f5f9;
+        }
+
+        .nav-item.active {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .nav-link {
+            color: #64748b !important;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #1e293b !important;
+        }
+
+        .nav-link i {
+            width: 24px;
+            margin-right: 12px;
+            font-size: 1.1rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+            font-weight: 700;
+            font-size: 2rem;
+            color: #1e293b;
+        }
+
+        .page-header h1 i {
+            color: #3b82f6;
+            margin-right: 12px;
+        }
+
+        .page-header p {
+            color: #64748b;
+            margin-top: 0.5rem;
+        }
+
+        /* Cards */
+        .card-modern {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .card-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+        }
+
+        .stat-card {
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .stat-card .stat-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card .stat-label {
+            color: #64748b;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0.25rem 0;
+        }
+
+        .stat-card .stat-change {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        /* Table Styles */
+        .table-modern {
+            font-size: 0.9rem;
+        }
+
+        .table-modern thead th {
+            background: #f8fafc;
+            color: #64748b;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 0.75rem 1rem;
+        }
+
+        .table-modern tbody td {
+            padding: 0.75rem 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .table-modern tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .table-modern tbody tr.suspicious {
+            background: #fef2f2 !important;
+            border-left: 3px solid #ef4444;
+        }
+
+        .table-modern tbody tr.critical {
+            background: #fff7ed !important;
+            border-left: 3px solid #f97316;
+        }
+
+        /* Badges */
+        .badge-status {
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .badge-status.success {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-status.danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .badge-status.warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .badge-status.info {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .badge-status.secondary {
+            background: #64748b;
+            color: white;
+        }
+
+        .badge-status.signed {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-status.unsigned {
+            background: #ef4444;
+            color: white;
+        }
+
+        /* Buttons */
+        .btn-action {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Chart Container */
+        .chart-container {
+            padding: 1.5rem;
+            height: 250px;
+            position: relative;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+
+        .badge-light-custom {
+            background: #f1f5f9;
+            color: #64748b;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
                 display: none;
             }
-        </script>
-        
-    </body>
+            .main-content {
+                padding: 1rem;
+            }
+            .stat-card .stat-value {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid px-0">
+        <div class="row g-0">
+            <!-- Sidebar -->
+            <div class="col-auto sidebar d-none d-md-block" style="width: 280px;">
+                <div class="sidebar-brand">
+                    <h2><i class="fas fa-shield-alt"></i>Hermes</h2>
+                    <small>Security Intelligence Platform</small>
+                </div>
+                
+                <nav class="nav flex-column">
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-th-large"></i>Dashboard
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('network_monitoring') }}">
+                            <i class="fas fa-network-wired"></i>Network
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('antivirus') }}">
+                            <i class="fas fa-shield-virus"></i>Antivirus
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('ids_dashboard') }}">
+                            <i class="fas fa-eye"></i>IDS/IPS
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('firewall') }}">
+                            <i class="fas fa-fire"></i>Firewall
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('service_management') }}">
+                            <i class="fas fa-server"></i>Services
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('process_monitoring') }}">
+                            <i class="fas fa-tasks"></i>Processes
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item active">
+                        <a class="nav-link" href="{{ url_for('manage_kernel_modules') }}">
+                            <i class="fas fa-cogs"></i>Kernel
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('file_integrity') }}">
+                            <i class="fas fa-file-alt"></i>File Integrity
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item mt-4">
+                        <a class="nav-link" href="{{ url_for('configure_ssh') }}">
+                            <i class="fas fa-terminal"></i>SSH Config
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('log_management') }}">
+                            <i class="fas fa-database"></i>Logs
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i class="fas fa-sign-out-alt"></i>Logout
+                        </a>
+                    </div>
+                </nav>
+                
+                <div class="position-absolute bottom-0 p-3" style="width: 280px;">
+                    <div class="text-center" style="color: #94a3b8; font-size: 0.75rem;">
+                        <i class="fas fa-code me-1"></i>Koosha Yeganeh<br>
+                        <span style="color: #cbd5e1;">v1.0.0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col main-content">
+                <!-- Header -->
+                <div class="page-header d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1><i class="fas fa-cogs"></i> Kernel Modules Management</h1>
+                        <p>Monitor and manage kernel modules in real-time</p>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge-light-custom" id="live-indicator">
+                            <i class="fas fa-circle text-success pulse-dot me-1" style="font-size: 0.5rem;"></i>
+                            Live
+                        </span>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="row g-3 mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #eff6ff; color: #3b82f6;">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <div class="stat-label">Loaded Modules</div>
+                            <div class="stat-value">{{ loaded_modules|length if loaded_modules else 0 }}</div>
+                            <div class="stat-change">
+                                <i class="fas fa-clock me-1"></i>Currently active
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fef2f2; color: #ef4444;">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-label">Suspicious Modules</div>
+                            <div class="stat-value">{{ suspicious_modules|length if suspicious_modules else 0 }}</div>
+                            <div class="stat-change" style="color: #ef4444;">
+                                <i class="fas fa-shield me-1"></i>
+                                {% if suspicious_modules and suspicious_modules|length == 0 %}
+                                    All clean
+                                {% elif suspicious_modules and suspicious_modules|length > 0 %}
+                                    Investigation needed
+                                {% else %}
+                                    No data
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fffbeb; color: #f59e0b;">
+                                <i class="fas fa-bug"></i>
+                            </div>
+                            <div class="stat-label">Vulnerabilities</div>
+                            <div class="stat-value">{{ hijacking_vulns|length if hijacking_vulns else 0 }}</div>
+                            <div class="stat-change" style="color: #f59e0b;">
+                                <i class="fas fa-exclamation-circle me-1"></i>
+                                {% if hijacking_vulns and hijacking_vulns|length > 0 %}
+                                    Critical issues found
+                                {% else %}
+                                    No vulnerabilities
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #ecfdf5; color: #10b981;">
+                                <i class="fas fa-certificate"></i>
+                            </div>
+                            <div class="stat-label">Signing Status</div>
+                            <div class="stat-value" style="font-size: 1.8rem;">
+                                {% if signing_status and signing_status.sig_enforce == '1' %}
+                                    <span style="color: #10b981;">✓ Enforced</span>
+                                {% elif signing_status %}
+                                    <span style="color: #ef4444;">✗ Disabled</span>
+                                {% else %}
+                                    <span style="color: #94a3b8;">Unknown</span>
+                                {% endif %}
+                            </div>
+                            <div class="stat-change">
+                                <i class="fas fa-lock me-1"></i>
+                                Secure Boot: {% if signing_status %}{{ signing_status.secureboot|capitalize }}{% else %}Unknown{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Module Status Chart -->
+                <div class="card-modern mb-4">
+                    <div class="chart-container">
+                        <h6 class="fw-semibold mb-3" style="color: #1e293b;">
+                            <i class="fas fa-chart-pie me-2" style="color: #3b82f6;"></i>
+                            Module Status Overview
+                        </h6>
+                        <div style="display: flex; gap: 2rem; height: 200px;">
+                            <div style="flex: 1;">
+                                <canvas id="moduleStatusChart"></canvas>
+                            </div>
+                            <div style="flex: 1;">
+                                <canvas id="signingStatusChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Suspicious Modules -->
+                {% if suspicious_modules and suspicious_modules|length > 0 %}
+                <div class="card-modern mb-4" id="suspiciousModulesSection">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-exclamation-triangle me-2" style="color: #ef4444;"></i>
+                                Suspicious Modules Detected
+                                <span class="badge bg-danger ms-2">{{ suspicious_modules|length }}</span>
+                            </h6>
+                            <button class="btn btn-danger btn-sm" onclick="unloadAllSuspicious()">
+                                <i class="fas fa-times-circle me-1"></i> Unload All
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-modern" id="suspiciousModulesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Module</th>
+                                        <th>Size</th>
+                                        <th>Refcount</th>
+                                        <th>Signature</th>
+                                        <th>Reasons</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for module in suspicious_modules %}
+                                    <tr class="suspicious">
+                                        <td><span class="fw-bold">{{ module.name }}</span></td>
+                                        <td>{{ module.size }}</td>
+                                        <td>{{ module.refcount }}</td>
+                                        <td>
+                                            <span class="badge-status {{ 'signed' if module.signature == 'signed' else 'unsigned' }}">
+                                                {{ module.signature }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% for reason in module.reasons %}
+                                            <span class="badge-status danger mb-1 d-block">{{ reason }}</span>
+                                            {% endfor %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-danger btn-action" onclick="unloadModule('{{ module.name }}')">
+                                                <i class="fas fa-times-circle me-1"></i> Unload
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Hijacking Vulnerabilities -->
+                {% if hijacking_vulns and hijacking_vulns|length > 0 %}
+                <div class="card-modern mb-4" id="vulnerabilitiesSection">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-bug me-2" style="color: #f97316;"></i>
+                                Module Hijacking Vulnerabilities
+                                <span class="badge bg-warning ms-2">{{ hijacking_vulns|length }}</span>
+                            </h6>
+                            <button class="btn btn-warning btn-sm" onclick="fixAllVulnerabilities()">
+                                <i class="fas fa-wrench me-1"></i> Fix All
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-modern" id="vulnerabilitiesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Path</th>
+                                        <th>Issue</th>
+                                        <th>Severity</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for vuln in hijacking_vulns %}
+                                    <tr class="critical">
+                                        <td><small>{{ vuln.path }}</small></td>
+                                        <td>{{ vuln.issue }}</td>
+                                        <td>
+                                            <span class="badge-status {{ 'danger' if vuln.severity == 'critical' else 'warning' }}">
+                                                {{ vuln.severity }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-outline-primary btn-action" onclick="fixVulnerability('{{ vuln.path }}')">
+                                                <i class="fas fa-wrench me-1"></i> Fix
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Loaded Modules -->
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-list me-2" style="color: #3b82f6;"></i>
+                                Loaded Kernel Modules
+                                <span class="badge bg-primary ms-2">{{ loaded_modules|length if loaded_modules else 0 }}</span>
+                            </h6>
+                            <div>
+                                <input type="text" class="form-control form-control-sm" id="loadedModuleSearch" 
+                                       placeholder="Search modules..." style="width: 200px; display: inline-block;">
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-modern" id="loadedModulesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Module</th>
+                                        <th>Size</th>
+                                        <th>Refcount</th>
+                                        <th>Signature</th>
+                                        <th>Status</th>
+                                        <th>Path</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if loaded_modules %}
+                                        {% for module in loaded_modules %}
+                                        <tr>
+                                            <td><span class="fw-bold">{{ module.name }}</span></td>
+                                            <td>{{ module.size }}</td>
+                                            <td>{{ module.refcount }}</td>
+                                            <td>
+                                                <span class="badge-status {{ 'signed' if module.signature == 'signed' else 'unsigned' }}">
+                                                    {{ module.signature }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge-status {{ 'success' if module.status == 'loaded' else 'secondary' }}">
+                                                    {{ module.status }}
+                                                </span>
+                                            </td>
+                                            <td><small>{{ module.path }}</small></td>
+                                            <td>
+                                                <button class="btn btn-outline-danger btn-action" onclick="unloadModule('{{ module.name }}')">
+                                                    <i class="fas fa-times-circle me-1"></i> Unload
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                <i class="fas fa-inbox fa-2x mb-2 d-block" style="opacity: 0.3;"></i>
+                                                No loaded modules available
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- All Available Modules -->
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-box-open me-2" style="color: #64748b;"></i>
+                                All Available Modules
+                                <span class="badge bg-secondary ms-2">{{ all_modules|length if all_modules else 0 }}</span>
+                            </h6>
+                            <div>
+                                <input type="text" class="form-control form-control-sm" id="moduleSearch" 
+                                       placeholder="Search modules..." style="width: 200px; display: inline-block;">
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-modern" id="allModulesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Module</th>
+                                        <th>Size</th>
+                                        <th>Loaded</th>
+                                        <th>Path</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if all_modules %}
+                                        {% for module in all_modules %}
+                                        <tr>
+                                            <td>{{ module.name }}</td>
+                                            <td>{{ module.size }}</td>
+                                            <td>
+                                                <span class="badge-status {{ 'success' if module.loaded else 'secondary' }}">
+                                                    {{ 'Yes' if module.loaded else 'No' }}
+                                                </span>
+                                            </td>
+                                            <td><small>{{ module.path }}</small></td>
+                                            <td>
+                                                {% if not module.loaded %}
+                                                <button class="btn btn-outline-success btn-action" onclick="loadModule('{{ module.name }}')">
+                                                    <i class="fas fa-play me-1"></i> Load
+                                                </button>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-4">
+                                                <i class="fas fa-inbox fa-2x mb-2 d-block" style="opacity: 0.3;"></i>
+                                                No available modules found
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kernel Security Configuration -->
+                <div class="card-modern">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-cog me-2" style="color: #3b82f6;"></i>
+                                Kernel Security Configuration
+                            </h6>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-modern">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Value</th>
+                                        <th>Security Impact</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if kernel_config %}
+                                        {% for param, value in kernel_config.items() %}
+                                        <tr>
+                                            <td>{{ param }}</td>
+                                            <td>
+                                                {% if value == 'y' or value == 'Y' %}
+                                                <span class="badge-status success">Enabled</span>
+                                                {% elif value == 'n' or value == 'N' %}
+                                                <span class="badge-status danger">Disabled</span>
+                                                {% else %}
+                                                {{ value }}
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if value == 'y' or value == 'Y' %}
+                                                    {% if 'DISABLE' in param or 'NO' in param %}
+                                                    <span class="badge-status danger">Negative</span>
+                                                    {% else %}
+                                                    <span class="badge-status success">Positive</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    {% if 'DISABLE' in param or 'NO' in param %}
+                                                    <span class="badge-status success">Positive</span>
+                                                    {% else %}
+                                                    <span class="badge-status danger">Negative</span>
+                                                    {% endif %}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="3" class="text-center text-muted py-4">
+                                                <i class="fas fa-cog fa-2x mb-2 d-block" style="opacity: 0.3;"></i>
+                                                No kernel configuration available
+                                            </td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="footer mt-4 d-flex justify-content-between align-items-center">
+                    <span>© 2026 LinuxAV-Solutions. All rights reserved.</span>
+                    <span>
+                        <i class="fas fa-code me-1"></i> Koosha Yeganeh
+                        <span class="mx-2">|</span>
+                        <i class="fas fa-shield-alt me-1"></i> Hermes v1.0.0
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    <script>
+        // Module Status Chart
+        document.addEventListener('DOMContentLoaded', function() {
+            // Module Status Chart
+            const ctx1 = document.getElementById('moduleStatusChart').getContext('2d');
+            
+            const suspicious = parseInt('{{ suspicious_modules|length if suspicious_modules else 0 }}');
+            const loaded = parseInt('{{ loaded_modules|length if loaded_modules else 0 }}');
+            const normal = loaded - suspicious;
+            
+            new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Normal Modules', 'Suspicious Modules'],
+                    datasets: [{
+                        data: [normal > 0 ? normal : 0, suspicious > 0 ? suspicious : 0],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#64748b',
+                                boxWidth: 12,
+                                padding: 10,
+                                font: {
+                                    size: 10,
+                                    weight: '500'
+                                }
+                            }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            // Signing Status Chart
+            const ctx2 = document.getElementById('signingStatusChart').getContext('2d');
+            
+            let signed = 0;
+            let unsigned = 0;
+            {% if loaded_modules %}
+                {% for module in loaded_modules %}
+                    {% if module.signature == 'signed' %}
+                        signed++;
+                    {% else %}
+                        unsigned++;
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+            
+            new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Signed', 'Unsigned'],
+                    datasets: [{
+                        data: [signed > 0 ? signed : 0, unsigned > 0 ? unsigned : 0],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#64748b',
+                                boxWidth: 12,
+                                padding: 10,
+                                font: {
+                                    size: 10,
+                                    weight: '500'
+                                }
+                            }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
+        });
+
+        // Search functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Search loaded modules
+            const loadedSearch = document.getElementById('loadedModuleSearch');
+            if (loadedSearch) {
+                loadedSearch.addEventListener('keyup', function() {
+                    const value = this.value.toLowerCase();
+                    document.querySelectorAll('#loadedModulesTable tbody tr').forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        row.style.display = text.includes(value) ? '' : 'none';
+                    });
+                });
+            }
+
+            // Search all modules
+            const moduleSearch = document.getElementById('moduleSearch');
+            if (moduleSearch) {
+                moduleSearch.addEventListener('keyup', function() {
+                    const value = this.value.toLowerCase();
+                    document.querySelectorAll('#allModulesTable tbody tr').forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        row.style.display = text.includes(value) ? '' : 'none';
+                    });
+                });
+            }
+        });
+
+        // Module Actions
+        function unloadModule(moduleName) {
+            Swal.fire({
+                title: 'Unload Module?',
+                text: `Are you sure you want to unload the module "${moduleName}"?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, unload it!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch('/kernel/unload_module', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `module=${moduleName}`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('Success', `Module "${moduleName}" unloaded successfully`, 'success');
+                            setTimeout(() => location.reload(), 1500);
+                        } else {
+                            Swal.fire('Error', data.error || 'Failed to unload module', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        Swal.fire('Error', 'Failed to unload module: ' + error, 'error');
+                    });
+                }
+            });
+        }
+
+        function loadModule(moduleName) {
+            Swal.fire({
+                title: 'Load Module?',
+                text: `Are you sure you want to load the module "${moduleName}"?`,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, load it!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch('/kernel/load_module', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `module=${moduleName}`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('Success', `Module "${moduleName}" loaded successfully`, 'success');
+                            setTimeout(() => location.reload(), 1500);
+                        } else {
+                            Swal.fire('Error', data.error || 'Failed to load module', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        Swal.fire('Error', 'Failed to load module: ' + error, 'error');
+                    });
+                }
+            });
+        }
+
+        function unloadAllSuspicious() {
+            Swal.fire({
+                title: 'Unload All Suspicious Modules?',
+                text: 'This action will unload all suspicious modules. Are you sure?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, unload all!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const modules = [];
+                    const table = document.getElementById('suspiciousModulesTable');
+                    if (table) {
+                        table.querySelectorAll('tbody tr').forEach(row => {
+                            const name = row.cells[0].textContent.trim();
+                            if (name) modules.push(name);
+                        });
+                    }
+
+                    if (modules.length === 0) {
+                        Swal.fire('Info', 'No suspicious modules to unload', 'info');
+                        return;
+                    }
+
+                    modules.forEach(module => {
+                        fetch('/kernel/unload_module', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: `module=${module}`
+                        });
+                    });
+
+                    Swal.fire('Success', `Unloading ${modules.length} suspicious modules...`, 'success');
+                    setTimeout(() => location.reload(), 2000);
+                }
+            });
+        }
+
+        function fixVulnerability(path) {
+            Swal.fire({
+                title: 'Fix Vulnerability?',
+                text: `Are you sure you want to fix the vulnerability at "${path}"?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, fix it!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch('/kernel/fix_vulnerability', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `path=${encodeURIComponent(path)}`
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire('Success', 'Vulnerability fixed successfully', 'success');
+                            setTimeout(() => location.reload(), 1500);
+                        } else {
+                            Swal.fire('Error', data.error || 'Failed to fix vulnerability', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        Swal.fire('Error', 'Failed to fix vulnerability: ' + error, 'error');
+                    });
+                }
+            });
+        }
+
+        function fixAllVulnerabilities() {
+            Swal.fire({
+                title: 'Fix All Vulnerabilities?',
+                text: 'This will fix all module hijacking vulnerabilities. Continue?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, fix all!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const paths = [];
+                    const table = document.getElementById('vulnerabilitiesTable');
+                    if (table) {
+                        table.querySelectorAll('tbody tr').forEach(row => {
+                            const path = row.cells[0].textContent.trim();
+                            if (path) paths.push(path);
+                        });
+                    }
+
+                    if (paths.length === 0) {
+                        Swal.fire('Info', 'No vulnerabilities to fix', 'info');
+                        return;
+                    }
+
+                    paths.forEach(path => {
+                        fetch('/kernel/fix_vulnerability', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: `path=${encodeURIComponent(path)}`
+                        });
+                    });
+
+                    Swal.fire('Success', `Fixing ${paths.length} vulnerabilities...`, 'success');
+                    setTimeout(() => location.reload(), 2000);
+                }
+            });
+        }
+    </script>
+</body>
 </html>

@@ -4,168 +4,445 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <meta name="description" content="LinuxAV-Solutions Hermes Services Management" />
-    <meta name="author" content="LinuxAV-Solutions" />
-    <title>Services Management - LinuxAV-Solutions Hermes</title>
-    <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
-    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <meta name="description" content="Hermes Services Management" />
+    <meta name="author" content="Koosha Yeganeh" />
+    <title>Services Management - Hermes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .suspicious-service {
-            background-color: rgba(220, 53, 69, 0.1);
-            border-left: 3px solid #dc3545;
+        * {
+            font-family: 'Inter', sans-serif;
         }
-        .service-active {
-            background-color: rgba(40, 167, 69, 0.1);
+        
+        body {
+            background: #f0f4f8;
+            color: #1e293b;
         }
-        .service-inactive {
-            background-color: rgba(108, 117, 125, 0.1);
+
+        /* Sidebar */
+        .sidebar {
+            background: #ffffff;
+            min-height: 100vh;
+            padding: 1.5rem 0;
+            border-right: 1px solid #e2e8f0;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.04);
         }
-        .service-action {
-            margin: 2px;
+
+        .sidebar-brand {
+            padding: 0 1.5rem 2rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-brand h2 {
+            color: #1e293b;
+            font-weight: 800;
+            font-size: 1.8rem;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-brand h2 i {
+            color: #3b82f6;
+            margin-right: 10px;
+        }
+
+        .sidebar-brand small {
+            color: #64748b;
+            font-size: 0.75rem;
+            display: block;
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+
+        .nav-item {
+            margin: 0.25rem 0.75rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-item:hover {
+            background: #f1f5f9;
+        }
+
+        .nav-item.active {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .nav-link {
+            color: #64748b !important;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #1e293b !important;
+        }
+
+        .nav-link i {
+            width: 24px;
+            margin-right: 12px;
+            font-size: 1.1rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+            font-weight: 700;
+            font-size: 2rem;
+            color: #1e293b;
+        }
+
+        .page-header h1 i {
+            color: #3b82f6;
+            margin-right: 12px;
+        }
+
+        .page-header p {
+            color: #64748b;
+            margin-top: 0.5rem;
+        }
+
+        /* Cards */
+        .card-modern {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .card-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+        }
+
+        .stat-card {
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .stat-card .stat-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card .stat-label {
+            color: #64748b;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0.25rem 0;
+        }
+
+        .stat-card .stat-change {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        /* Service Cards */
+        .service-card {
+            padding: 1.25rem;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+        }
+
+        .service-card:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+
+        .service-card .service-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .service-card .service-status.active {
+            background: #10b981;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .service-card .service-status.inactive {
+            background: #ef4444;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .service-card .service-status.suspicious {
+            background: #f59e0b;
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+        }
+
+        /* Table Styles */
+        .table-modern {
+            font-size: 0.9rem;
+        }
+
+        .table-modern thead th {
+            background: #f8fafc;
+            color: #64748b;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 0.75rem 1rem;
+        }
+
+        .table-modern tbody td {
+            padding: 0.75rem 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .table-modern tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .table-modern tbody tr.suspicious {
+            background: #fef2f2 !important;
+            border-left: 3px solid #ef4444;
+        }
+
+        .table-modern tbody tr.active-row {
+            background: #f0fdf4 !important;
+        }
+
+        .table-modern tbody tr.inactive-row {
+            background: #f8fafc !important;
+        }
+
+        /* Badges */
+        .badge-status {
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .badge-status.active {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-status.inactive {
+            background: #ef4444;
+            color: white;
+        }
+
+        .badge-status.suspicious {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .badge-status.loaded {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* Buttons */
+        .btn-action {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Chart Container */
+        .chart-container {
+            padding: 1.5rem;
+            height: 250px;
+            position: relative;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+
+        .badge-light-custom {
+            background: #f1f5f9;
+            color: #64748b;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                padding: 1rem;
+            }
+            .stat-card .stat-value {
+                font-size: 1.8rem;
+            }
         }
     </style>
 </head>
-<body class="sb-nav-fixed">
-    <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-        <!-- Navbar Brand-->
-        <a class="navbar-brand ps-3" href="index.html">
-            <i class="fas fa-shield-alt me-2"></i>Hermes
-        </a>
-        <!-- Sidebar Toggle-->
-        <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!">
-            <i class="fas fa-bars"></i>
-        </button>
-        
-        <!-- System Time Display -->
-        <div class="mx-auto text-white" id="system-time">
-            <i class="fas fa-clock me-2"></i>
-            <span id="current-time">{{ now.strftime('%Y-%m-%d %H:%M:%S') }}</span>
-        </div>
-        
-        <!-- Navbar-->
-        <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
-            <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-user fa-fw"></i>
-                    <span class="d-none d-lg-inline">Admin</span>
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                    <li><a class="dropdown-item" href="#!"><i class="fas fa-cog fa-fw me-2"></i>Settings</a></li>
-                    <li><a class="dropdown-item" href="#!"><i class="fas fa-list fa-fw me-2"></i>Activity Log</a></li>
-                    <li><hr class="dropdown-divider" /></li>
-                    <li><a class="dropdown-item" href="/logout"><i class="fas fa-sign-out-alt fa-fw me-2"></i>Logout</a></li>
-                </ul>
-            </li>
-            <li class="nav-item dropdown">
-                <a class="nav-link" id="alertsDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-bell fa-fw"></i>
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                        3+
-                        <span class="visually-hidden">unread alerts</span>
-                    </span>
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="alertsDropdown" style="min-width: 300px;">
-                    <li><h6 class="dropdown-header">Security Alerts</h6></li>
-                    <li>
-                        <a class="dropdown-item d-flex align-items-center" href="#">
-                            <div class="me-3">
-                                <div class="bg-danger icon-circle"><i class="fas fa-exclamation-triangle text-white"></i></div>
-                            </div>
-                            <div>
-                                <span class="small text-gray-500">Just now</span>
-                                <p class="mb-0 small">Malicious process detected</p>
-                            </div>
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item d-flex align-items-center" href="#">
-                            <div class="me-3">
-                                <div class="bg-warning icon-circle"><i class="fas fa-exclamation text-white"></i></div>
-                            </div>
-                            <div>
-                                <span class="small text-gray-500">5 min ago</span>
-                                <p class="mb-0 small">Suspicious network activity</p>
-                            </div>
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item d-flex align-items-center" href="#">
-                            <div class="me-3">
-                                <div class="bg-primary icon-circle"><i class="fas fa-info-circle text-white"></i></div>
-                            </div>
-                            <div>
-                                <span class="small text-gray-500">1 hour ago</span>
-                                <p class="mb-0 small">Firewall rule added</p>
-                            </div>
-                        </a>
-                    </li>
-                    <li><hr class="dropdown-divider" /></li>
-                    <li><a class="dropdown-item text-center small" href="#">View All Alerts</a></li>
-                </ul>
-            </li>
-        </ul>
-    </nav>
-    <div id="layoutSidenav">
-        <div id="layoutSidenav_nav">
-            <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
-                <div class="sb-sidenav-menu">
-                    <div class="nav">
-                        <div class="sb-sidenav-menu-heading">Core</div>
-                        <a class="nav-link" href="index.html">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
-                            Dashboard
-                        </a>
-                        <div class="sb-sidenav-menu-heading">Security Modules</div>
-                        <a class="nav-link" href="/network">
-                            <div class="sb-nav-link-icon"><i class="fas fa-network-wired"></i></div>
-                            Network Monitoring
-                        </a>
-                        <a class="nav-link" href="/scan">
-                            <div class="sb-nav-link-icon"><i class="fas fa-search"></i></div>
-                            Scan Management
-                        </a>
-                        <a class="nav-link active" href="/ids">
-                            <div class="sb-nav-link-icon"><i class="fas fa-shield-virus"></i></div>
-                            IDS/IPS
-                        </a>
-                        <a class="nav-link" href="/firewall">
-                            <div class="sb-nav-link-icon"><i class="fas fa-fire"></i></div>
-                            Firewall
-                        </a>
-                        <a class="nav-link" href="/services">
-                            <div class="sb-nav-link-icon"><i class="fas fa-server"></i></div>
-                            Services
-                        </a>
-
-                        <a class="nav-link" href="/process">    
-                            <div class="sb-nav-link-icon"><i class="fas fa-server"></i></div>
-                            Process
-                        </a>
-                        
-                        <a class="nav-link" href="/manage_users">
-                            <div class="sb-nav-link-icon"><i class="fas fa-users"></i></div>
-                            Manage Users
-                        </a>
-                        <a class="nav-link" href="/manage_kernel_modules">
-                            <div class="sb-nav-link-icon"><i class="fas fa-server"></i></div>
-                            Manage Kernel 
+<body>
+    <div class="container-fluid px-0">
+        <div class="row g-0">
+            <!-- Sidebar -->
+            <div class="col-auto sidebar d-none d-md-block" style="width: 280px;">
+                <div class="sidebar-brand">
+                    <h2><i class="fas fa-shield-alt"></i>Hermes</h2>
+                    <small>Security Intelligence Platform</small>
+                </div>
+                
+                <nav class="nav flex-column">
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-th-large"></i>Dashboard
                         </a>
                     </div>
-                </div>
-                <div class="sb-sidenav-footer">
-                    <div class="small">Developer :</div>
-                        Koosha Yeganeh
-                    <div class="small mt-1">Version: 1.0.0</div>
-                </div>
-            </nav>
-        </div>
-    
-    <div id="layoutSidenav_content">
-        <main>
-            <div class="container-fluid px-4">
-                <h1 class="mt-4">Services Management</h1>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('network_monitoring') }}">
+                            <i class="fas fa-network-wired"></i>Network
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('antivirus') }}">
+                            <i class="fas fa-shield-virus"></i>Antivirus
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('ids_dashboard') }}">
+                            <i class="fas fa-eye"></i>IDS/IPS
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('firewall') }}">
+                            <i class="fas fa-fire"></i>Firewall
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item active">
+                        <a class="nav-link" href="{{ url_for('service_management') }}">
+                            <i class="fas fa-server"></i>Services
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('process_monitoring') }}">
+                            <i class="fas fa-tasks"></i>Processes
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('manage_kernel_modules') }}">
+                            <i class="fas fa-cogs"></i>Kernel
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('file_integrity') }}">
+                            <i class="fas fa-file-alt"></i>File Integrity
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item mt-4">
+                        <a class="nav-link" href="{{ url_for('configure_ssh') }}">
+                            <i class="fas fa-terminal"></i>SSH Config
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('log_management') }}">
+                            <i class="fas fa-database"></i>Logs
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i class="fas fa-sign-out-alt"></i>Logout
+                        </a>
+                    </div>
+                </nav>
                 
+                <div class="position-absolute bottom-0 p-3" style="width: 280px;">
+                    <div class="text-center" style="color: #94a3b8; font-size: 0.75rem;">
+                        <i class="fas fa-code me-1"></i>Koosha Yeganeh<br>
+                        <span style="color: #cbd5e1;">v1.0.0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col main-content">
+                <!-- Header -->
+                <div class="page-header d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1><i class="fas fa-server"></i> Services Management</h1>
+                        <p>Monitor and manage system services in real-time</p>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge-light-custom" id="live-indicator">
+                            <i class="fas fa-circle text-success pulse-dot me-1" style="font-size: 0.5rem;"></i>
+                            Live
+                        </span>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alerts -->
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
                         {% for category, message in messages %}
@@ -178,17 +455,99 @@
                     {% endif %}
                 {% endwith %}
 
+                <!-- Stats Row -->
+                <div class="row g-3 mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #eff6ff; color: #3b82f6;">
+                                <i class="fas fa-server"></i>
+                            </div>
+                            <div class="stat-label">Total Services</div>
+                            <div class="stat-value">{{ services|length }}</div>
+                            <div class="stat-change">
+                                <i class="fas fa-clock me-1"></i>All system services
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #ecfdf5; color: #10b981;">
+                                <i class="fas fa-play-circle"></i>
+                            </div>
+                            <div class="stat-label">Running Services</div>
+                            <div class="stat-value">
+                                {% set running = services|selectattr('active', 'equalto', 'active')|list|length %}
+                                {{ running }}
+                            </div>
+                            <div class="stat-change" style="color: #10b981;">
+                                <i class="fas fa-check-circle me-1"></i>{{ (running / services|length * 100)|round|int }}% of total
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fef2f2; color: #ef4444;">
+                                <i class="fas fa-stop-circle"></i>
+                            </div>
+                            <div class="stat-label">Stopped Services</div>
+                            <div class="stat-value">
+                                {% set stopped = services|selectattr('active', 'equalto', 'inactive')|list|length %}
+                                {{ stopped }}
+                            </div>
+                            <div class="stat-change" style="color: #ef4444;">
+                                <i class="fas fa-exclamation-circle me-1"></i>{{ (stopped / services|length * 100)|round|int }}% of total
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fffbeb; color: #f59e0b;">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-label">Suspicious Services</div>
+                            <div class="stat-value">{{ suspicious_services|length }}</div>
+                            <div class="stat-change" style="color: #f59e0b;">
+                                <i class="fas fa-shield me-1"></i>
+                                {% if suspicious_services|length == 0 %}
+                                    All services verified
+                                {% else %}
+                                    Investigation needed
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Service Status Chart -->
+                <div class="card-modern mb-4">
+                    <div class="chart-container">
+                        <h6 class="fw-semibold mb-3" style="color: #1e293b;">
+                            <i class="fas fa-chart-pie me-2" style="color: #3b82f6;"></i>
+                            Service Status Overview
+                        </h6>
+                        <div style="height: 200px; display: flex; justify-content: center; align-items: center;">
+                            <canvas id="serviceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Suspicious Services Section -->
                 {% if suspicious_services %}
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-danger text-white">
-                        <h6 class="m-0 font-weight-bold">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Suspicious Services Detected
-                        </h6>
-                    </div>
-                    <div class="card-body">
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-exclamation-triangle me-2" style="color: #ef4444;"></i>
+                                Suspicious Services Detected
+                                <span class="badge bg-danger ms-2">{{ suspicious_services|length }}</span>
+                            </h6>
+                            <span class="text-danger small">⚠️ Requires immediate attention</span>
+                        </div>
                         <div class="table-responsive">
-                            <table class="table table-bordered" id="suspiciousServicesTable">
+                            <table class="table table-modern">
                                 <thead>
                                     <tr>
                                         <th>Service Name</th>
@@ -199,10 +558,13 @@
                                 </thead>
                                 <tbody>
                                     {% for service in suspicious_services %}
-                                    <tr class="suspicious-service">
-                                        <td>{{ service.name }}</td>
+                                    <tr class="suspicious">
                                         <td>
-                                            <span class="badge bg-{{ 'success' if service.active == 'active' else 'danger' }}">
+                                            <i class="fas fa-exclamation-circle text-danger me-2"></i>
+                                            <span class="fw-semibold">{{ service.name }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge-status {{ 'active' if service.active == 'active' else 'inactive' }}">
                                                 {{ service.active }}
                                             </span>
                                         </td>
@@ -212,18 +574,18 @@
                                                 <input type="hidden" name="service" value="{{ service.name }}">
                                                 {% if service.active == 'active' %}
                                                 <input type="hidden" name="action" value="stop">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger service-action">
-                                                    <i class="fas fa-stop"></i> Stop
+                                                <button type="submit" class="btn btn-danger btn-action">
+                                                    <i class="fas fa-stop me-1"></i> Stop
                                                 </button>
                                                 {% else %}
                                                 <input type="hidden" name="action" value="start">
-                                                <button type="submit" class="btn btn-sm btn-outline-success service-action">
-                                                    <i class="fas fa-play"></i> Start
+                                                <button type="submit" class="btn btn-success btn-action">
+                                                    <i class="fas fa-play me-1"></i> Start
                                                 </button>
                                                 {% endif %}
                                                 <input type="hidden" name="action" value="restart">
-                                                <button type="submit" class="btn btn-sm btn-outline-warning service-action">
-                                                    <i class="fas fa-redo"></i> Restart
+                                                <button type="submit" class="btn btn-warning btn-action">
+                                                    <i class="fas fa-redo me-1"></i> Restart
                                                 </button>
                                             </form>
                                         </td>
@@ -237,15 +599,22 @@
                 {% endif %}
 
                 <!-- All Services Section -->
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-primary text-white">
-                        <h6 class="m-0 font-weight-bold">
-                            <i class="fas fa-server me-2"></i>All System Services
-                        </h6>
-                    </div>
-                    <div class="card-body">
+                <div class="card-modern">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-list me-2" style="color: #3b82f6;"></i>
+                                All System Services
+                                <span class="badge bg-primary ms-2">{{ services|length }}</span>
+                            </h6>
+                            <div>
+                                <span class="badge-status active me-1">Running</span>
+                                <span class="badge-status inactive me-1">Stopped</span>
+                                <span class="badge-status loaded">Loaded</span>
+                            </div>
+                        </div>
                         <div class="table-responsive">
-                            <table class="table table-bordered" id="allServicesTable">
+                            <table class="table table-modern" id="allServicesTable">
                                 <thead>
                                     <tr>
                                         <th>Service Name</th>
@@ -257,33 +626,52 @@
                                 </thead>
                                 <tbody>
                                     {% for service in services %}
-                                    <tr class="{% if service.active == 'active' %}service-active{% else %}service-inactive{% endif %}">
-                                        <td>{{ service.name }}</td>
+                                    <tr class="{% if service.active == 'active' %}active-row{% else %}inactive-row{% endif %}">
                                         <td>
-                                            <span class="badge bg-{{ 'success' if service.active == 'active' else 'danger' }}">
+                                            <i class="fas fa-{{ 'play-circle text-success' if service.active == 'active' else 'stop-circle text-danger' }} me-2"></i>
+                                            {{ service.name }}
+                                        </td>
+                                        <td>
+                                            <span class="badge-status {{ 'active' if service.active == 'active' else 'inactive' }}">
                                                 {{ service.active }}
                                             </span>
                                         </td>
-                                        <td>{{ service.loaded }}</td>
+                                        <td>
+                                            <span class="badge-status loaded">{{ service.loaded }}</span>
+                                        </td>
                                         <td>{{ service.sub }}</td>
                                         <td>
                                             <form action="{{ url_for('service_management') }}" method="POST" class="d-inline">
                                                 <input type="hidden" name="service" value="{{ service.name }}">
                                                 {% if service.active == 'active' %}
                                                 <input type="hidden" name="action" value="stop">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger service-action">
-                                                    <i class="fas fa-stop"></i> Stop
+                                                <button type="submit" class="btn btn-outline-danger btn-action" title="Stop Service">
+                                                    <i class="fas fa-stop"></i>
                                                 </button>
                                                 <input type="hidden" name="action" value="restart">
-                                                <button type="submit" class="btn btn-sm btn-outline-warning service-action">
-                                                    <i class="fas fa-redo"></i> Restart
+                                                <button type="submit" class="btn btn-outline-warning btn-action" title="Restart Service">
+                                                    <i class="fas fa-redo"></i>
                                                 </button>
                                                 {% else %}
                                                 <input type="hidden" name="action" value="start">
-                                                <button type="submit" class="btn btn-sm btn-outline-success service-action">
-                                                    <i class="fas fa-play"></i> Start
+                                                <button type="submit" class="btn btn-outline-success btn-action" title="Start Service">
+                                                    <i class="fas fa-play"></i>
                                                 </button>
                                                 {% endif %}
+                                            </form>
+                                            <form action="{{ url_for('service_management') }}" method="POST" class="d-inline">
+                                                <input type="hidden" name="service" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="enable">
+                                                <button type="submit" class="btn btn-outline-info btn-action" title="Enable Service">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                            </form>
+                                            <form action="{{ url_for('service_management') }}" method="POST" class="d-inline">
+                                                <input type="hidden" name="service" value="{{ service.name }}">
+                                                <input type="hidden" name="action" value="disable">
+                                                <button type="submit" class="btn btn-outline-secondary btn-action" title="Disable Service">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
                                             </form>
                                         </td>
                                     </tr>
@@ -293,31 +681,126 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </main>
-        <footer class="py-4 bg-light mt-auto">
-            <div class="container-fluid px-4">
-                <div class="d-flex align-items-center justify-content-between small">
-                    <div class="text-muted">Copyright &copy; LinuxAV-Solutions {{ now.year }}</div>
-                    <div>
-                        <button class="btn btn-sm btn-primary" onclick="location.reload()">
-                            <i class="fas fa-sync-alt me-1"></i> Refresh
-                        </button>
+
+                <!-- Quick Actions -->
+                <div class="card-modern mt-4">
+                    <div class="p-3">
+                        <h6 class="fw-semibold mb-3" style="color: #1e293b;">
+                            <i class="fas fa-bolt me-2" style="color: #f59e0b;"></i>
+                            Quick Actions
+                        </h6>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="btn btn-outline-primary" onclick="location.reload()">
+                                <i class="fas fa-sync-alt me-1"></i> Refresh Services
+                            </button>
+                            <button class="btn btn-outline-success" onclick="startAllServices()">
+                                <i class="fas fa-play me-1"></i> Start All
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="stopAllServices()">
+                                <i class="fas fa-stop me-1"></i> Stop All
+                            </button>
+                            <button class="btn btn-outline-warning" onclick="restartAllServices()">
+                                <i class="fas fa-redo me-1"></i> Restart All
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Footer -->
+                <div class="footer mt-4 d-flex justify-content-between align-items-center">
+                    <span>© 2026 LinuxAV-Solutions. All rights reserved.</span>
+                    <span>
+                        <i class="fas fa-code me-1"></i> Koosha Yeganeh
+                        <span class="mx-2">|</span>
+                        <i class="fas fa-shield-alt me-1"></i> Hermes v1.0.0
+                    </span>
+                </div>
             </div>
-        </footer>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/umd/simple-datatables.min.js" crossorigin="anonymous"></script>
     <script>
+        // Service Status Chart
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize DataTables
-            new simpleDatatables.DataTable('#suspiciousServicesTable');
-            new simpleDatatables.DataTable('#allServicesTable');
+            const ctx = document.getElementById('serviceChart').getContext('2d');
+            
+            const running = {{ services|selectattr('active', 'equalto', 'active')|list|length }};
+            const stopped = {{ services|selectattr('active', 'equalto', 'inactive')|list|length }};
+            const suspicious = {{ suspicious_services|length }};
+            
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Running', 'Stopped', 'Suspicious'],
+                    datasets: [{
+                        data: [running, stopped, suspicious],
+                        backgroundColor: [
+                            '#10b981',
+                            '#ef4444',
+                            '#f59e0b'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#64748b',
+                                boxWidth: 12,
+                                padding: 20,
+                                font: {
+                                    size: 11,
+                                    weight: '500'
+                                }
+                            }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
         });
+
+        // Quick Action Functions
+        function startAllServices() {
+            if (confirm('Are you sure you want to start all services?')) {
+                document.querySelectorAll('form input[name="action"][value="start"]').forEach(input => {
+                    input.closest('form').submit();
+                });
+            }
+        }
+
+        function stopAllServices() {
+            if (confirm('Are you sure you want to stop all services?')) {
+                document.querySelectorAll('form input[name="action"][value="stop"]').forEach(input => {
+                    input.closest('form').submit();
+                });
+            }
+        }
+
+        function restartAllServices() {
+            if (confirm('Are you sure you want to restart all services?')) {
+                document.querySelectorAll('form input[name="action"][value="restart"]').forEach(input => {
+                    input.closest('form').submit();
+                });
+            }
+        }
+
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toISOString().replace('T', ' ').substr(0, 19);
+            const timeElement = document.getElementById('current-time');
+            if (timeElement) {
+                timeElement.textContent = timeString;
+            }
+        }
+        setInterval(updateTime, 1000);
     </script>
 </body>
 </html>

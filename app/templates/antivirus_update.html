@@ -4,244 +4,855 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <meta name="description" content="" />
-    <meta name="author" content="" />
-    <title>Antivirus Update - myNAS</title>
-    <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
-    <link href="../static/css/styles.css" rel="stylesheet" />
-    <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
+    <meta name="description" content="Hermes Antivirus Database Update" />
+    <meta name="author" content="Koosha Yeganeh" />
+    <title>Antivirus Update - Hermes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        .antivirus-card {
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: #f0f4f8;
+            color: #1e293b;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #ffffff;
+            min-height: 100vh;
+            padding: 1.5rem 0;
+            border-right: 1px solid #e2e8f0;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.04);
+        }
+
+        .sidebar-brand {
+            padding: 0 1.5rem 2rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-brand h2 {
+            color: #1e293b;
+            font-weight: 800;
+            font-size: 1.8rem;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-brand h2 i {
+            color: #3b82f6;
+            margin-right: 10px;
+        }
+
+        .sidebar-brand small {
+            color: #64748b;
+            font-size: 0.75rem;
+            display: block;
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+
+        .nav-item {
+            margin: 0.25rem 0.75rem;
+            border-radius: 12px;
             transition: all 0.3s ease;
-            border-left: 5px solid #28a745;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        .antivirus-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+        .nav-item:hover {
+            background: #f1f5f9;
         }
-        .tool-card {
-            border-left: 5px solid #17a2b8;
+
+        .nav-item.active {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
         }
+
+        .nav-link {
+            color: #64748b !important;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #1e293b !important;
+        }
+
+        .nav-link i {
+            width: 24px;
+            margin-right: 12px;
+            font-size: 1.1rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+            font-weight: 700;
+            font-size: 2rem;
+            color: #1e293b;
+        }
+
+        .page-header h1 i {
+            color: #3b82f6;
+            margin-right: 12px;
+        }
+
+        .page-header p {
+            color: #64748b;
+            margin-top: 0.5rem;
+        }
+
+        /* Cards */
+        .card-modern {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .card-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+        }
+
+        .stat-card {
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .stat-card .stat-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card .stat-label {
+            color: #64748b;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0.25rem 0;
+        }
+
+        .stat-card .stat-change {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        /* Tool Selection Cards */
+        .tool-select-card {
+            cursor: pointer;
+            padding: 1.25rem;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+            text-align: center;
+            height: 100%;
+        }
+
+        .tool-select-card:hover {
+            background: #ffffff;
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+        }
+
+        .tool-select-card.selected {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .tool-select-card .tool-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tool-select-card .tool-name {
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 1rem;
+        }
+
+        .tool-select-card .tool-desc {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .tool-select-card .tool-version {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 0.5rem;
+        }
+
+        /* Badge Light Custom */
+        .badge-light-custom {
+            background: #f1f5f9;
+            color: #64748b;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        /* Pre formatted */
         .pre-formatted {
             white-space: pre-wrap;
-            font-family: monospace;
-            background-color: #f8f9fa;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            background: #f8fafc;
             padding: 1rem;
-            border-radius: 0.25rem;
+            border-radius: 8px;
             overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
         }
-        .status-badge {
-            font-size: 0.9rem;
-            padding: 0.35rem 0.5rem;
+
+        .pre-formatted::-webkit-scrollbar {
+            width: 8px;
         }
-        .update-progress {
-            height: 25px;
+
+        .pre-formatted::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        .pre-formatted::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        /* Status Badges */
+        .badge-status {
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .badge-status.success {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-status.danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .badge-status.warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .badge-status.info {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .badge-status.secondary {
+            background: #64748b;
+            color: white;
+        }
+
+        /* Buttons */
+        .btn-action {
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Progress Bar */
+        .progress-modern {
+            height: 8px;
+            border-radius: 4px;
+            background: #f1f5f9;
+            overflow: hidden;
+        }
+
+        .progress-modern .progress-bar {
+            border-radius: 4px;
+            transition: width 1s ease;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+
+        .spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                padding: 1rem;
+            }
+            .stat-card .stat-value {
+                font-size: 1.8rem;
+            }
         }
     </style>
 </head>
-
-<body class="sb-nav-fixed">
-    <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">myNAS
-        <!-- Navbar Brand-->
-        <a class="navbar-brand ps-3" href="index.html"></a>
-        <!-- Sidebar Toggle-->
-        <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!"><i class="fas fa-bars"></i></button>
-        <!-- Navbar Search-->
-        <form class="d-none d-md-inline-block form-inline ms-auto me-0 me-md-3 my-2 my-md-0">
-            <div class="input-group">
-                <input class="form-control" type="text" placeholder="Search for..." aria-label="Search for..." aria-describedby="btnNavbarSearch" />
-                <button class="btn btn-primary" id="btnNavbarSearch" type="button"><i class="fas fa-search"></i></button>
-            </div>
-        </form>
-        <!-- Navbar-->
-        <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
-            <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-user fa-fw"></i></a>
-                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                    <li><a class="dropdown-item" href="#!">Settings</a></li>
-                    <li><a class="dropdown-item" href="#!">Activity Log</a></li>
-                    <li><hr class="dropdown-divider" /></li>
-                    <li><a class="dropdown-item" href="#!">Logout</a></li>
-                </ul>
-            </li>
-        </ul>
-    </nav>
-    <div id="layoutSidenav">
-        <div id="layoutSidenav_nav">
-            <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
-                <div class="sb-sidenav-menu">
-                    <div class="nav">
-                        <div class="sb-sidenav-menu-heading">Core</div>
-                        <a class="nav-link" href="/">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
-                            Dashboard
-                        </a>
-                        <div class="sb-sidenav-menu-heading">Security</div>
-                        <a class="nav-link" href="/antivirus">
-                            <div class="sb-nav-link-icon"><i class="fas fa-shield-virus"></i></div>
-                            Antivirus Scan
-                        </a>
-                        <a class="nav-link active" href="/antivirus/update">
-                            <div class="sb-nav-link-icon"><i class="fas fa-cloud-download-alt"></i></div>
-                            Update Databases
-                        </a>
-                        <a class="nav-link" href="/firewall">
-                            <div class="sb-nav-link-icon"><i class="fas fa-fire"></i></div>
-                            Firewall
+<body>
+    <div class="container-fluid px-0">
+        <div class="row g-0">
+            <!-- Sidebar -->
+            <div class="col-auto sidebar d-none d-md-block" style="width: 280px;">
+                <div class="sidebar-brand">
+                    <h2><i class="fas fa-shield-alt"></i>Hermes</h2>
+                    <small>Security Intelligence Platform</small>
+                </div>
+                
+                <nav class="nav flex-column">
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-th-large"></i>Dashboard
                         </a>
                     </div>
-                </div>
-                <div class="sb-sidenav-footer">
-                    <div class="small">Logged in as:</div>
-                    myNAS
-                </div>
-            </nav>
-        </div>
-        <div id="layoutSidenav_content">
-            <main>
-                <div class="container-fluid px-4">
-                    <h1 class="mt-4">Antivirus Database Update</h1>
-                    <ol class="breadcrumb mb-4">
-                        <li class="breadcrumb-item"><a href="index.html">Dashboard</a></li>
-                        <li class="breadcrumb-item"><a href="/antivirus">Antivirus</a></li>
-                        <li class="breadcrumb-item active">Update</li>
-                    </ol>
                     
-                    <!-- Flash Messages -->
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                    {% endwith %}
-
-                    <div class="card mb-4 antivirus-card">
-                        <div class="card-header bg-success text-white">
-                            <i class="fas fa-cloud-download-alt me-1"></i>
-                            Update Antivirus Databases
-                        </div>
-                        <div class="card-body">
-                            <form method="GET" action="/antivirus/update">
-                                <div class="mb-3">
-                                    <h5>Select Antivirus Tools to Update:</h5>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="tools" value="clamav" id="clamavCheck" checked>
-                                        <label class="form-check-label" for="clamavCheck">
-                                            <span class="badge bg-primary status-badge">ClamAV</span>
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="tools" value="maldet" id="maldetCheck" checked>
-                                        <label class="form-check-label" for="maldetCheck">
-                                            <span class="badge bg-info status-badge">Malware Detect (LMD)</span>
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="tools" value="rkhunter" id="rkhunterCheck" checked>
-                                        <label class="form-check-label" for="rkhunterCheck">
-                                            <span class="badge bg-warning text-dark status-badge">Rootkit Hunter</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-sync-alt me-1"></i> Update Selected
-                                </button>
-                            </form>
-                        </div>
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('network_monitoring') }}">
+                            <i class="fas fa-network-wired"></i>Network
+                        </a>
                     </div>
-
-                    <!-- Update Results -->
-                    {% if results %}
-                    <div class="card mb-4 tool-card">
-                        <div class="card-header bg-info text-white">
-                            <i class="fas fa-tasks me-1"></i>
-                            Update Results
-                        </div>
-                        <div class="card-body">
-                            {% for tool, output in results.items() %}
-                            <div class="mb-4">
-                                <h5>
-                                    {% if tool == 'clamav' %}
-                                        <span class="badge bg-primary status-badge">ClamAV</span>
-                                    {% elif tool == 'maldet' %}
-                                        <span class="badge bg-info status-badge">Malware Detect</span>
-                                    {% elif tool == 'rkhunter' %}
-                                        <span class="badge bg-warning text-dark status-badge">Rootkit Hunter</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary status-badge">{{ tool }}</span>
-                                    {% endif %}
-                                </h5>
-                                <div class="pre-formatted">{{ output }}</div>
-                            </div>
-                            {% endfor %}
-                        </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('antivirus') }}">
+                            <i class="fas fa-shield-virus"></i>Antivirus
+                        </a>
                     </div>
+                    
+                    <div class="nav-item active">
+                        <a class="nav-link" href="{{ url_for('antivirus_update') }}">
+                            <i class="fas fa-cloud-download-alt"></i>Updates
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('ids_dashboard') }}">
+                            <i class="fas fa-eye"></i>IDS/IPS
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('firewall') }}">
+                            <i class="fas fa-fire"></i>Firewall
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('service_management') }}">
+                            <i class="fas fa-server"></i>Services
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('process_monitoring') }}">
+                            <i class="fas fa-tasks"></i>Processes
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('manage_kernel_modules') }}">
+                            <i class="fas fa-cogs"></i>Kernel
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item mt-4">
+                        <a class="nav-link" href="{{ url_for('configure_ssh') }}">
+                            <i class="fas fa-terminal"></i>SSH Config
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('log_management') }}">
+                            <i class="fas fa-database"></i>Logs
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i class="fas fa-sign-out-alt"></i>Logout
+                        </a>
+                    </div>
+                </nav>
+                
+                <div class="position-absolute bottom-0 p-3" style="width: 280px;">
+                    <div class="text-center" style="color: #94a3b8; font-size: 0.75rem;">
+                        <i class="fas fa-code me-1"></i>Koosha Yeganeh<br>
+                        <span style="color: #cbd5e1;">v1.0.0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col main-content">
+                <!-- Header -->
+                <div class="page-header d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1><i class="fas fa-cloud-download-alt"></i> Database Updates</h1>
+                        <p>Update antivirus and security databases to latest versions</p>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge-light-custom" id="live-indicator">
+                            <i class="fas fa-circle text-success pulse-dot me-1" style="font-size: 0.5rem;"></i>
+                            Live
+                        </span>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                            <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' }} me-2"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
                     {% endif %}
+                {% endwith %}
 
-                    <!-- Last Update Status -->
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <i class="fas fa-history me-1"></i>
-                            Update History
+                <!-- Stats Row -->
+                <div class="row g-3 mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #eff6ff; color: #3b82f6;">
+                                <i class="fas fa-shield-virus"></i>
+                            </div>
+                            <div class="stat-label">Total Tools</div>
+                            <div class="stat-value">4</div>
+                            <div class="stat-change">
+                                <i class="fas fa-check-circle me-1" style="color: #10b981;"></i>
+                                All available
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-bordered" id="updateHistoryTable">
-                                    <thead>
-                                        <tr>
-                                            <th>Timestamp</th>
-                                            <th>Tools Updated</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <!-- This would be populated from your logs -->
-                                        <tr>
-                                            
-                                            <td>
-                                                {% if results %}
-                                                    {{ results.keys()|join(', ') }}
-                                                {% else %}
-                                                    None
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-success">Completed</span>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #ecfdf5; color: #10b981;">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-label">Last Update</div>
+                            <div class="stat-value" style="font-size: 1.5rem;">
+                                {% if results %}
+                                    {{ results.timestamp }}
+                                {% else %}
+                                    Never
+                                {% endif %}
+                            </div>
+                            <div class="stat-change">
+                                <i class="fas fa-clock me-1"></i>
+                                {% if results %}
+                                    {{ results.duration }} ago
+                                {% else %}
+                                    No updates performed
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fffbeb; color: #f59e0b;">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-label">Pending Updates</div>
+                            <div class="stat-value" id="pendingCount">0</div>
+                            <div class="stat-change">
+                                <i class="fas fa-arrow-up me-1" style="color: #f59e0b;"></i>
+                                Check for updates
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fef2f2; color: #ef4444;">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="stat-label">Security Status</div>
+                            <div class="stat-value" style="font-size: 1.8rem;">
+                                <span style="color: #10b981;">✓ Protected</span>
+                            </div>
+                            <div class="stat-change">
+                                <i class="fas fa-shield me-1"></i>Databases up to date
                             </div>
                         </div>
                     </div>
                 </div>
-            </main>
-            <footer class="py-4 bg-light mt-auto">
-                <div class="container-fluid px-4">
-                    <div class="d-flex align-items-center justify-content-between small">
-                        <div class="text-muted">Copyright &copy; myNAS 2023</div>
-                        <div>
-                            <a href="#">Privacy Policy</a>
-                            &middot;
-                            <a href="#">Terms &amp; Conditions</a>
+
+                <!-- Update Section -->
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <h6 class="fw-semibold mb-3" style="color: #1e293b;">
+                            <i class="fas fa-download me-2" style="color: #3b82f6;"></i>
+                            Select Tools to Update
+                        </h6>
+                        
+                        <form method="GET" action="/antivirus/update" id="updateForm">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-12">
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="selectAllUpdates(true)">
+                                            <i class="fas fa-check-circle me-1"></i>Select All
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="selectAllUpdates(false)">
+                                            <i class="fas fa-times-circle me-1"></i>Deselect All
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="tool-select-card" onclick="toggleTool('clamav')" id="clamavCard">
+                                        <div class="tool-icon" style="color: #3b82f6;">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <div class="tool-name">ClamAV</div>
+                                        <div class="tool-desc">Signature-based antivirus</div>
+                                        <div class="tool-version">Version: 0.103.8</div>
+                                        <input type="checkbox" class="form-check-input" name="tools" id="clamavCheck" value="clamav" hidden checked>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="tool-select-card" onclick="toggleTool('maldet')" id="maldetCard">
+                                        <div class="tool-icon" style="color: #f59e0b;">
+                                            <i class="fas fa-bug"></i>
+                                        </div>
+                                        <div class="tool-name">Maldet</div>
+                                        <div class="tool-desc">Malware detection</div>
+                                        <div class="tool-version">Version: 1.6.4</div>
+                                        <input type="checkbox" class="form-check-input" name="tools" id="maldetCheck" value="maldet" hidden checked>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="tool-select-card" onclick="toggleTool('rkhunter')" id="rkhunterCard">
+                                        <div class="tool-icon" style="color: #ef4444;">
+                                            <i class="fas fa-search"></i>
+                                        </div>
+                                        <div class="tool-name">Rkhunter</div>
+                                        <div class="tool-desc">Rootkit detection</div>
+                                        <div class="tool-version">Version: 1.4.6</div>
+                                        <input type="checkbox" class="form-check-input" name="tools" id="rkhunterCheck" value="rkhunter" hidden checked>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-3 col-sm-6">
+                                    <div class="tool-select-card" onclick="toggleTool('yara')" id="yaraCard">
+                                        <div class="tool-icon" style="color: #10b981;">
+                                            <i class="fas fa-file-code"></i>
+                                        </div>
+                                        <div class="tool-name">YARA</div>
+                                        <div class="tool-desc">Pattern matching</div>
+                                        <div class="tool-version">Version: 4.2.3</div>
+                                        <input type="checkbox" class="form-check-input" name="tools" id="yaraCheck" value="yara" hidden checked>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-action" id="updateButton">
+                                    <i class="fas fa-sync-alt me-2"></i>Update Selected
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Update Progress -->
+                <div id="updateProgress" style="display: none;" class="card-modern mb-4">
+                    <div class="p-3">
+                        <h6 class="fw-semibold mb-3" style="color: #1e293b;">
+                            <i class="fas fa-spinner spinning me-2" style="color: #3b82f6;"></i>
+                            Updating...
+                        </h6>
+                        <div class="progress-modern">
+                            <div class="progress-bar" style="width: 0%; background: linear-gradient(90deg, #3b82f6, #60a5fa);"></div>
+                        </div>
+                        <div class="mt-2 text-center text-muted small" id="updateStatus">Initializing...</div>
+                    </div>
+                </div>
+
+                <!-- Update Results -->
+                {% if results %}
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-tasks me-2" style="color: #10b981;"></i>
+                                Update Results
+                            </h6>
+                            <span class="badge-status success">
+                                <i class="fas fa-check-circle me-1"></i>Completed
+                            </span>
+                        </div>
+                        
+                        {% for tool, output in results.items() %}
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-{{ 'shield-alt' if tool == 'clamav' else 'bug' if tool == 'maldet' else 'search' if tool == 'rkhunter' else 'file-code' }} me-2" 
+                                   style="color: {{ '#3b82f6' if tool == 'clamav' else '#f59e0b' if tool == 'maldet' else '#ef4444' if tool == 'rkhunter' else '#10b981' }};"></i>
+                                <span class="fw-semibold">{{ tool|title }}</span>
+                                <span class="badge-status success ms-2">Updated</span>
+                            </div>
+                            <div class="pre-formatted">{{ output }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Update History -->
+                <div class="card-modern">
+                    <div class="p-3">
+                        <h6 class="fw-semibold mb-3" style="color: #1e293b;">
+                            <i class="fas fa-history me-2" style="color: #3b82f6;"></i>
+                            Update History
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-modern" id="updateHistoryTable">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Tools Updated</th>
+                                        <th>Status</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if results %}
+                                    <tr>
+                                        <td>{{ results.timestamp }}</td>
+                                        <td>
+                                            {% for tool in results.keys() %}
+                                                <span class="badge-status info">{{ tool|title }}</span>
+                                            {% endfor %}
+                                        </td>
+                                        <td><span class="badge-status success">Completed</span></td>
+                                        <td>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="viewUpdateDetails()">
+                                                <i class="fas fa-eye me-1"></i> View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted py-4">
+                                            <i class="fas fa-inbox fa-2x mb-2 d-block" style="opacity: 0.3;"></i>
+                                            No update history available
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-            </footer>
+
+                <!-- Footer -->
+                <div class="footer mt-4 d-flex justify-content-between align-items-center">
+                    <span>© 2026 LinuxAV-Solutions. All rights reserved.</span>
+                    <span>
+                        <i class="fas fa-code me-1"></i> Koosha Yeganeh
+                        <span class="mx-2">|</span>
+                        <i class="fas fa-shield-alt me-1"></i> Hermes v1.0.0
+                    </span>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Update Details Modal -->
+    <div class="modal fade" id="updateDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background: #f8fafc;">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-alt me-2" style="color: #3b82f6;"></i>
+                        Update Details
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="updateDetailsContent" class="pre-formatted">
+                        {% if results %}
+                            {% for tool, output in results.items() %}
+                                === {{ tool|upper }} ===
+                                {{ output }}
+                                
+                            {% endfor %}
+                        {% else %}
+                            No update details available.
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-    <script src="../static/js/scripts.js"></script>
     <script>
-        // Initialize DataTable for history table
+        // Toggle tool selection
+        function toggleTool(tool) {
+            const card = document.getElementById(`${tool}Card`);
+            const checkbox = document.getElementById(`${tool}Check`);
+            
+            card.classList.toggle('selected');
+            checkbox.checked = !checkbox.checked;
+        }
+
+        // Select all updates
+        function selectAllUpdates(select) {
+            document.querySelectorAll('input[name="tools"]').forEach(checkbox => {
+                checkbox.checked = select;
+                const tool = checkbox.id.replace('Check', '');
+                const card = document.getElementById(`${tool}Card`);
+                if (select) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.remove('selected');
+                }
+            });
+        }
+
+        // View update details
+        function viewUpdateDetails() {
+            new bootstrap.Modal(document.getElementById('updateDetailsModal')).show();
+        }
+
+        // Initialize selected cards
         document.addEventListener('DOMContentLoaded', function() {
-            $('#updateHistoryTable').DataTable({
-                order: [[0, 'desc']] // Sort by timestamp descending
+            document.querySelectorAll('input[name="tools"]').forEach(checkbox => {
+                if (checkbox.checked) {
+                    const tool = checkbox.id.replace('Check', '');
+                    document.getElementById(`${tool}Card`).classList.add('selected');
+                }
+            });
+        });
+
+        // Update form submission with progress
+        document.getElementById('updateForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const checkedTools = document.querySelectorAll('input[name="tools"]:checked');
+            if (checkedTools.length === 0) {
+                Swal.fire('Error', 'Please select at least one tool to update', 'error');
+                return;
+            }
+            
+            Swal.fire({
+                title: 'Update Databases?',
+                text: `This will update ${checkedTools.length} tool(s). Continue?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, update',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show progress
+                    document.getElementById('updateProgress').style.display = 'block';
+                    document.getElementById('updateButton').disabled = true;
+                    
+                    // Simulate progress
+                    let progress = 0;
+                    const interval = setInterval(() => {
+                        progress += Math.random() * 15;
+                        if (progress > 95) progress = 95;
+                        document.querySelector('.progress-modern .progress-bar').style.width = progress + '%';
+                        document.getElementById('updateStatus').textContent = `Updating... ${Math.round(progress)}%`;
+                    }, 500);
+                    
+                    // Submit form
+                    const formData = new FormData(this);
+                    const params = new URLSearchParams(formData);
+                    
+                    fetch('/antivirus/update?' + params.toString(), {
+                        method: 'GET'
+                    })
+                    .then(response => response.text())
+                    .then(html => {
+                        clearInterval(interval);
+                        document.querySelector('.progress-modern .progress-bar').style.width = '100%';
+                        document.getElementById('updateStatus').textContent = 'Complete!';
+                        
+                        setTimeout(() => {
+                            document.body.innerHTML = html;
+                        }, 1000);
+                    })
+                    .catch(error => {
+                        clearInterval(interval);
+                        Swal.fire('Error', 'Failed to update: ' + error, 'error');
+                        document.getElementById('updateButton').disabled = false;
+                        document.getElementById('updateProgress').style.display = 'none';
+                    });
+                }
             });
         });
     </script>

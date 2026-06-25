@@ -4,135 +4,452 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <meta name="description" content="LinuxAV-Solutions Hermes Network Monitoring" />
-    <meta name="author" content="LinuxAV-Solutions" />
-    <title>Network Monitoring - LinuxAV-Solutions Hermes</title>
-    <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
-    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
+    <meta name="description" content="Hermes Network Monitoring" />
+    <meta name="author" content="Koosha Yeganeh" />
+    <title>Network Monitoring - Hermes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        .suspicious-row {
-            background-color: rgba(220, 53, 69, 0.1) !important;
+        * {
+            font-family: 'Inter', sans-serif;
         }
-        .malicious-port {
-            background-color: rgba(220, 53, 69, 0.2);
-            border-left: 3px solid #dc3545;
+        
+        body {
+            background: #f0f4f8;
+            color: #1e293b;
         }
-        .malicious-ip {
-            background-color: rgba(253, 126, 20, 0.2);
-            border-left: 3px solid #fd7e14;
+
+        /* Sidebar */
+        .sidebar {
+            background: #ffffff;
+            min-height: 100vh;
+            padding: 1.5rem 0;
+            border-right: 1px solid #e2e8f0;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.04);
         }
+
+        .sidebar-brand {
+            padding: 0 1.5rem 2rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-brand h2 {
+            color: #1e293b;
+            font-weight: 800;
+            font-size: 1.8rem;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-brand h2 i {
+            color: #3b82f6;
+            margin-right: 10px;
+        }
+
+        .sidebar-brand small {
+            color: #64748b;
+            font-size: 0.75rem;
+            display: block;
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+
+        .nav-item {
+            margin: 0.25rem 0.75rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-item:hover {
+            background: #f1f5f9;
+        }
+
+        .nav-item.active {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .nav-link {
+            color: #64748b !important;
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #1e293b !important;
+        }
+
+        .nav-link i {
+            width: 24px;
+            margin-right: 12px;
+            font-size: 1.1rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-header h1 {
+            font-weight: 700;
+            font-size: 2rem;
+            color: #1e293b;
+        }
+
+        .page-header h1 i {
+            color: #3b82f6;
+            margin-right: 12px;
+        }
+
+        .page-header p {
+            color: #64748b;
+            margin-top: 0.5rem;
+        }
+
+        /* Cards */
+        .card-modern {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .card-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+        }
+
+        .stat-card {
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .stat-card .stat-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-card .stat-label {
+            color: #64748b;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0.25rem 0;
+        }
+
+        .stat-card .stat-change {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        /* Table Styles */
+        .table-modern {
+            font-size: 0.9rem;
+        }
+
+        .table-modern thead th {
+            background: #f8fafc;
+            color: #64748b;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 0.75rem 1rem;
+        }
+
+        .table-modern tbody td {
+            padding: 0.75rem 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .table-modern tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badges */
         .badge-malicious {
-            background-color: #dc3545;
+            background: #ef4444;
+            color: white;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
         }
+
         .badge-suspicious {
-            background-color: #fd7e14;
+            background: #f59e0b;
+            color: white;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
         }
-        .connection-action {
-            margin: 2px;
-            min-width: 90px;
+
+        .badge-normal {
+            background: #10b981;
+            color: white;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
         }
-        .tooltip-inner {
-            max-width: 400px;
+
+        /* Row States */
+        .row-malicious {
+            background: #fef2f2 !important;
+            border-left: 3px solid #ef4444;
+        }
+
+        .row-suspicious {
+            background: #fffbeb !important;
+            border-left: 3px solid #f59e0b;
+        }
+
+        .row-malicious-ip {
+            background: #fff7ed !important;
+            border-left: 3px solid #f97316;
+        }
+
+        /* Buttons */
+        .btn-action {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Chart Container */
+        .chart-container {
+            padding: 1.5rem;
+            height: 250px;
+            position: relative;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 6px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e2e8f0;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 1rem;
+            padding: 0.5rem 0;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -1.5rem;
+            top: 0.75rem;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3b82f6;
+            border: 2px solid #ffffff;
+        }
+
+        .timeline-item.critical::before {
+            background: #ef4444;
+        }
+
+        .timeline-item.warning::before {
+            background: #f59e0b;
+        }
+
+        .timeline-item .time {
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+
+        .timeline-item .event-text {
+            font-size: 0.85rem;
+            color: #1e293b;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #e2e8f0;
+            color: #64748b;
+            font-size: 0.85rem;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                padding: 1rem;
+            }
+            .stat-card .stat-value {
+                font-size: 1.8rem;
+            }
         }
     </style>
 </head>
-<body class="sb-nav-fixed">
-    <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-        <!-- Navbar Brand-->
-        <a class="navbar-brand ps-3" href="{{ url_for('dashboard') }}">
-            <i class="fas fa-shield-alt me-2"></i>Hermes
-        </a>
-        <!-- Sidebar Toggle-->
-        <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!">
-            <i class="fas fa-bars"></i>
-        </button>
-        
-        <!-- System Time Display -->
-        <div class="mx-auto text-white" id="system-time">
-            <i class="fas fa-clock me-2"></i>
-            
-        </div>
-        
-        <!-- Navbar User Menu -->
-        <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
-            <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-user fa-fw"></i> {{ current_user.username }}
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                    <li><a class="dropdown-item" href="#!">Profile</a></li>
-                    <li><a class="dropdown-item" href="#!">Activity Log</a></li>
-                    <li><hr class="dropdown-divider" /></li>
-                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
-                </ul>
-            </li>
-        </ul>
-    </nav>
-    <div id="layoutSidenav">
-        <div id="layoutSidenav_nav">
-            <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
-                <div class="sb-sidenav-menu">
-                    <div class="nav">
-                        <div class="sb-sidenav-menu-heading">Core</div>
-                        <a class="nav-link active" href="{{ url_for('dashboard') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
-                            Dashboard
-                        </a>
-                        <div class="sb-sidenav-menu-heading">Security Modules</div>
-                        <a class="nav-link" href="{{ url_for('network_monitoring') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-network-wired"></i></div>
-                            Network Monitoring
-                        </a>
-                        <a class="nav-link" href="{{ url_for('scan') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-search"></i></div>
-                            Scan Management
-                        </a>
-                        <a class="nav-link" href="{{ url_for('ids_dashboard') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-shield-virus"></i></div>
-                            IDS/IPS
-                        </a>
-                        <a class="nav-link" href="{{ url_for('firewall_management') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-fire"></i></div>
-                            Firewall
-                        </a>
-                        <a class="nav-link" href="{{ url_for('service_management') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-server"></i></div>
-                            Services
-                        </a>
-                        <a class="nav-link" href="{{ url_for('process_monitoring') }}">    
-                            <div class="sb-nav-link-icon"><i class="fas fa-tasks"></i></div>
-                            Process Monitoring
-                        </a>
-                        <a class="nav-link" href="{{ url_for('manage_kernel_modules') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-cogs"></i></div>
-                            Kernel Modules
-                        </a>
-                        <div class="sb-sidenav-menu-heading">Administration</div>
-                        <a class="nav-link" href="{{ url_for('configure_ssh') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-terminal"></i></div>
-                            SSH Configuration
-                        </a>
-                        <a class="nav-link" href="{{ url_for('configuration_backup') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-database"></i></div>
-                            Backup & Restore
+<body>
+    <div class="container-fluid px-0">
+        <div class="row g-0">
+            <!-- Sidebar -->
+            <div class="col-auto sidebar d-none d-md-block" style="width: 280px;">
+                <div class="sidebar-brand">
+                    <h2><i class="fas fa-shield-alt"></i>Hermes</h2>
+                    <small>Security Intelligence Platform</small>
+                </div>
+                
+                <nav class="nav flex-column">
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-th-large"></i>Dashboard
                         </a>
                     </div>
-                </div>
-                <div class="sb-sidenav-footer">
-                    <div class="small">Developer :</div>
-                        Koosha Yeganeh
-                    <div class="small mt-1">Version: 1.0.0</div>
-                </div>
-            </nav>
-        </div>
-    
-    <div id="layoutSidenav_content">
-        <main>
-            <div class="container-fluid px-4">
-                <h1 class="mt-4">Network Monitoring</h1>
+                    
+                    <div class="nav-item active">
+                        <a class="nav-link" href="{{ url_for('network_monitoring') }}">
+                            <i class="fas fa-network-wired"></i>Network
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('antivirus') }}">
+                            <i class="fas fa-shield-virus"></i>Antivirus
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('ids_dashboard') }}">
+                            <i class="fas fa-eye"></i>IDS/IPS
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('firewall') }}">
+                            <i class="fas fa-fire"></i>Firewall
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('service_management') }}">
+                            <i class="fas fa-server"></i>Services
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('process_monitoring') }}">
+                            <i class="fas fa-tasks"></i>Processes
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('manage_kernel_modules') }}">
+                            <i class="fas fa-cogs"></i>Kernel
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('file_integrity') }}">
+                            <i class="fas fa-file-alt"></i>File Integrity
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item mt-4">
+                        <a class="nav-link" href="{{ url_for('configure_ssh') }}">
+                            <i class="fas fa-terminal"></i>SSH Config
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('log_management') }}">
+                            <i class="fas fa-database"></i>Logs
+                        </a>
+                    </div>
+                    
+                    <div class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}">
+                            <i class="fas fa-sign-out-alt"></i>Logout
+                        </a>
+                    </div>
+                </nav>
                 
+                <div class="position-absolute bottom-0 p-3" style="width: 280px;">
+                    <div class="text-center" style="color: #94a3b8; font-size: 0.75rem;">
+                        <i class="fas fa-code me-1"></i>Koosha Yeganeh<br>
+                        <span style="color: #cbd5e1;">v1.0.0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col main-content">
+                <!-- Header -->
+                <div class="page-header d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1><i class="fas fa-network-wired"></i> Network Monitoring</h1>
+                        <p>Real-time network traffic analysis and threat detection</p>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge-light-custom" id="live-indicator">
+                            <i class="fas fa-circle text-success pulse-dot me-1" style="font-size: 0.5rem;"></i>
+                            Live
+                        </span>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alerts -->
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
                         {% for category, message in messages %}
@@ -145,59 +462,97 @@
                     {% endif %}
                 {% endwith %}
 
-                <!-- Suspicious Activity Summary -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <div class="card bg-danger text-white mb-4">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="card-title">Malicious Ports Detected</h5>
-                                        <h2 class="mb-0">{{ suspicious_listening|length }}</h2>
-                                    </div>
-                                    <i class="fas fa-exclamation-triangle fa-3x"></i>
-                                </div>
+                <!-- Stats Row -->
+                <div class="row g-3 mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #eff6ff; color: #3b82f6;">
+                                <i class="fas fa-plug"></i>
                             </div>
-                            <div class="card-footer d-flex align-items-center justify-content-between">
-                                <a class="small text-white stretched-link" href="#suspicious-ports">View Details</a>
-                                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                            <div class="stat-label">Total Connections</div>
+                            <div class="stat-value">{{ established|length }}</div>
+                            <div class="stat-change">
+                                <i class="fas fa-clock me-1"></i>Active connections
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card bg-warning text-white mb-4">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="card-title">Malicious IP Connections</h5>
-                                        <h2 class="mb-0">{{ suspicious_established|length }}</h2>
-                                    </div>
-                                    <i class="fas fa-network-wired fa-3x"></i>
-                                </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fef2f2; color: #ef4444;">
+                                <i class="fas fa-exclamation-triangle"></i>
                             </div>
-                            <div class="card-footer d-flex align-items-center justify-content-between">
-                                <a class="small text-white stretched-link" href="#suspicious-connections">View Details</a>
-                                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                            <div class="stat-label">Malicious Ports</div>
+                            <div class="stat-value">{{ suspicious_listening|length }}</div>
+                            <div class="stat-change">
+                                <i class="fas fa-exclamation-circle me-1" style="color: #ef4444;"></i>Critical
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #fffbeb; color: #f59e0b;">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="stat-label">Suspicious IPs</div>
+                            <div class="stat-value">{{ suspicious_established|length }}</div>
+                            <div class="stat-change">
+                                <i class="fas fa-clock me-1"></i>Needs investigation
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card-modern stat-card">
+                            <div class="stat-icon" style="background: #ecfdf5; color: #10b981;">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-label">Security Status</div>
+                            <div class="stat-value" style="font-size: 1.8rem;">
+                                {% if suspicious_listening|length == 0 and suspicious_established|length == 0 %}
+                                    <span style="color: #10b981;">✓ Secure</span>
+                                {% else %}
+                                    <span style="color: #ef4444;">⚠ At Risk</span>
+                                {% endif %}
+                            </div>
+                            <div class="stat-change">
+                                <i class="fas fa-shield me-1"></i>
+                                {% if suspicious_listening|length == 0 and suspicious_established|length == 0 %}
+                                    All clear
+                                {% else %}
+                                    Action required
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Suspicious Listening Ports Section -->
-                <div class="card shadow mb-4" id="suspicious-ports">
-                    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-danger text-white">
-                        <h6 class="m-0 font-weight-bold">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Malicious Listening Ports
+                <!-- Traffic Chart -->
+                <div class="card-modern mb-4">
+                    <div class="chart-container">
+                        <h6 class="fw-semibold mb-3" style="color: #1e293b;">
+                            <i class="fas fa-chart-area me-2" style="color: #3b82f6;"></i>
+                            Network Traffic Analysis
                         </h6>
-                        <div>
-                            <span class="badge bg-white text-danger">{{ suspicious_listening|length }} Detected</span>
-                        </div>
+                        <canvas id="trafficChart"></canvas>
                     </div>
-                    <div class="card-body">
+                </div>
+
+                <!-- Suspicious Listening Ports -->
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-exclamation-triangle me-2" style="color: #ef4444;"></i>
+                                Malicious Listening Ports
+                                <span class="badge bg-danger ms-2">{{ suspicious_listening|length }}</span>
+                            </h6>
+                        </div>
                         {% if suspicious_listening %}
                         <div class="table-responsive">
-                            <table class="table table-bordered table-hover" id="suspiciousPortsTable">
-                                <thead class="table-light">
+                            <table class="table table-modern">
+                                <thead>
                                     <tr>
                                         <th>Protocol</th>
                                         <th>Port</th>
@@ -209,28 +564,23 @@
                                 </thead>
                                 <tbody>
                                     {% for port in suspicious_listening %}
-                                    <tr class="malicious-port">
-                                        <td>{{ port.netid }}</td>
+                                    <tr class="row-malicious">
+                                        <td><span class="badge bg-secondary">{{ port.netid }}</span></td>
                                         <td>
-                                            <span class="badge badge-malicious">{{ port.port }}</span>
-                                            <i class="fas fa-info-circle ms-2" 
-                                               data-bs-toggle="tooltip" 
-                                               data-bs-html="true"
-                                               title="<b>Known malicious port:</b><br>This port is commonly used by malware or for suspicious activities"></i>
+                                            <span class="badge-malicious">{{ port.port }}</span>
                                         </td>
                                         <td>{{ port.process }}</td>
                                         <td>{{ port.local }}</td>
                                         <td>{{ port.reason }}</td>
                                         <td>
+                                            {% if port.pid %}
                                             <form action="{{ url_for('kill_process') }}" method="POST" class="d-inline">
-                                                {% for conn in established %}
-                                                        <input type="hidden" name="pid" value="{{ conn.pid }}">
-                                                        {% endfor %}
-
-                                                <button type="submit" class="btn btn-sm btn-outline-danger connection-action">
+                                                <input type="hidden" name="pid" value="{{ port.pid }}">
+                                                <button type="submit" class="btn btn-danger btn-action">
                                                     <i class="fas fa-skull me-1"></i> Kill
                                                 </button>
                                             </form>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -245,21 +595,20 @@
                     </div>
                 </div>
 
-                <!-- Suspicious Established Connections Section -->
-                <div class="card shadow mb-4" id="suspicious-connections">
-                    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-warning text-white">
-                        <h6 class="m-0 font-weight-bold">
-                            <i class="fas fa-network-wired me-2"></i>Suspicious Established Connections
-                        </h6>
-                        <div>
-                            <span class="badge bg-white text-warning">{{ suspicious_established|length }} Detected</span>
+                <!-- Suspicious Connections -->
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-network-wired me-2" style="color: #f59e0b;"></i>
+                                Suspicious Connections
+                                <span class="badge bg-warning ms-2">{{ suspicious_established|length }}</span>
+                            </h6>
                         </div>
-                    </div>
-                    <div class="card-body">
                         {% if suspicious_established %}
                         <div class="table-responsive">
-                            <table class="table table-bordered table-hover" id="suspiciousConnectionsTable">
-                                <thead class="table-light">
+                            <table class="table table-modern">
+                                <thead>
                                     <tr>
                                         <th>Protocol</th>
                                         <th>Remote Address</th>
@@ -271,15 +620,14 @@
                                 </thead>
                                 <tbody>
                                     {% for conn in suspicious_established %}
-                                    <tr class="{% if 'malicious IP' in conn.reason %}malicious-ip{% else %}suspicious-row{% endif %}">
-                                        <td>{{ conn.netid }}</td>
+                                    <tr class="{% if 'malicious IP' in conn.reason %}row-malicious-ip{% else %}row-suspicious{% endif %}">
+                                        <td><span class="badge bg-secondary">{{ conn.netid }}</span></td>
                                         <td>
                                             {{ conn.remote }}
                                             {% if 'malicious IP' in conn.reason %}
-                                            <i class="fas fa-info-circle ms-2" 
+                                            <i class="fas fa-info-circle text-danger ms-1" 
                                                data-bs-toggle="tooltip" 
-                                               data-bs-html="true"
-                                               title="<b>Known malicious IP:</b><br>This IP address is listed in malware_ips.txt"></i>
+                                               title="Known malicious IP"></i>
                                             {% endif %}
                                         </td>
                                         <td>
@@ -290,16 +638,20 @@
                                         <td>{{ conn.process }}</td>
                                         <td>{{ conn.reason }}</td>
                                         <td>
+                                            {% if conn.pid %}
                                             <form action="{{ url_for('kill_process') }}" method="POST" class="d-inline">
                                                 <input type="hidden" name="pid" value="{{ conn.pid }}">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger connection-action">
+                                                <button type="submit" class="btn btn-danger btn-action">
                                                     <i class="fas fa-skull me-1"></i> Kill
                                                 </button>
                                             </form>
-                                            <button class="btn btn-sm btn-outline-warning connection-action block-ip" 
+                                            {% endif %}
+                                            {% if conn.remote and conn.remote.split(':')[0] in malicious_ips %}
+                                            <button class="btn btn-warning btn-action block-ip" 
                                                     data-ip="{{ conn.remote.split(':')[0] }}">
                                                 <i class="fas fa-shield-alt me-1"></i> Block
                                             </button>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -308,89 +660,85 @@
                         </div>
                         {% else %}
                         <div class="alert alert-success">
-                            <i class="fas fa-check-circle me-2"></i> No suspicious established connections detected
+                            <i class="fas fa-check-circle me-2"></i> No suspicious connections detected
                         </div>
                         {% endif %}
                     </div>
                 </div>
 
-                <!-- All Listening Ports Section -->
-<!-- All Listening Ports Section -->
-<div class="card shadow mb-4">
-    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-primary text-white">
-        <h6 class="m-0 font-weight-bold">
-            <i class="fas fa-list me-2"></i>All Listening Ports
-        </h6>
-        <div>
-            <span class="badge bg-white text-primary">{{ listening|length }} Total</span>
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover" id="allPortsTable">
-                <thead class="table-light">
-                    <tr>
-                        <th>Protocol</th>
-                        <th>Port</th>
-                        <th>Process</th>
-                        <th>Local Address</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for port in listening %}
-                    <tr class="{% if port.port in malicious_ports %}malicious-port{% endif %}">
-                        <td>{{ port.netid }}</td>
-                        <td>
-                            {% if port.port in malicious_ports %}
-                            <span class="badge badge-malicious">{{ port.port }}</span>
-                            <i class="fas fa-exclamation-triangle text-danger ms-2"></i>
-                            {% else %}
-                            {{ port.port }}
-                            {% endif %}
-                        </td>
-                        <td>{{ port.process.split(',')[0] }}</td>
-                        <td>{{ port.local }}</td>
-                        <td>
-                            {% if port.port in malicious_ports %}
-                            <span class="badge badge-malicious">Malicious</span>
-                            {% else %}
-                            <span class="badge bg-success">Normal</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if port.pid %}
-                            <form action="{{ url_for('kill_process') }}" method="POST" class="d-inline">
-                                <input type="hidden" name="pid" value="{{ conn.pid }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger connection-action">
-                                    <i class="fas fa-skull me-1"></i> Kill
-                                </button>
-                            </form>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-                <!-- All Established Connections Section -->
-                <div class="card shadow mb-4">
-                    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-success text-white">
-                        <h6 class="m-0 font-weight-bold">
-                            <i class="fas fa-plug me-2"></i>All Established Connections
-                        </h6>
-                        <div>
-                            <span class="badge bg-white text-success">{{ established|length }} Total</span>
+                <!-- All Listening Ports -->
+                <div class="card-modern mb-4">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-list me-2" style="color: #3b82f6;"></i>
+                                All Listening Ports
+                                <span class="badge bg-primary ms-2">{{ listening|length }}</span>
+                            </h6>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-modern" id="allPortsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Protocol</th>
+                                        <th>Port</th>
+                                        <th>Process</th>
+                                        <th>Local Address</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for port in listening %}
+                                    <tr class="{% if port.port in malicious_ports %}row-malicious{% endif %}">
+                                        <td><span class="badge bg-secondary">{{ port.netid }}</span></td>
+                                        <td>
+                                            {% if port.port in malicious_ports %}
+                                            <span class="badge-malicious">{{ port.port }}</span>
+                                            {% else %}
+                                            {{ port.port }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ port.process.split(',')[0] if port.process else 'N/A' }}</td>
+                                        <td>{{ port.local }}</td>
+                                        <td>
+                                            {% if port.port in malicious_ports %}
+                                            <span class="badge-malicious">Malicious</span>
+                                            {% else %}
+                                            <span class="badge-normal">Normal</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if port.pid %}
+                                            <form action="{{ url_for('kill_process') }}" method="POST" class="d-inline">
+                                                <input type="hidden" name="pid" value="{{ port.pid }}">
+                                                <button type="submit" class="btn btn-danger btn-action">
+                                                    <i class="fas fa-skull me-1"></i> Kill
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                    <div class="card-body">
+                </div>
+
+                <!-- All Connections -->
+                <div class="card-modern">
+                    <div class="p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-semibold mb-0" style="color: #1e293b;">
+                                <i class="fas fa-plug me-2" style="color: #10b981;"></i>
+                                All Connections
+                                <span class="badge bg-success ms-2">{{ established|length }}</span>
+                            </h6>
+                        </div>
                         <div class="table-responsive">
-                            <table class="table table-bordered table-hover" id="allConnectionsTable">
-                                <thead class="table-light">
+                            <table class="table table-modern" id="allConnectionsTable">
+                                <thead>
                                     <tr>
                                         <th>Protocol</th>
                                         <th>Remote Address</th>
@@ -402,17 +750,12 @@
                                 </thead>
                                 <tbody>
                                     {% for conn in established %}
-                                    <tr class="{% if conn in suspicious_established %}{% if 'malicious IP' in conn.reason %}malicious-ip{% else %}suspicious-row{% endif %}{% endif %}">
-                                        <td>{{ conn.netid }}</td>
-                                        <td>
-                                            {{ conn.remote }}
-                                            {% if conn in suspicious_established and 'malicious IP' in conn.reason %}
-                                            <i class="fas fa-exclamation-triangle text-warning ms-2"></i>
-                                            {% endif %}
-                                        </td>
+                                    <tr class="{% if conn in suspicious_established %}{% if 'malicious IP' in conn.reason %}row-malicious-ip{% else %}row-suspicious{% endif %}{% endif %}">
+                                        <td><span class="badge bg-secondary">{{ conn.netid }}</span></td>
+                                        <td>{{ conn.remote }}</td>
                                         <td>
                                             {% if conn.port in malicious_ports %}
-                                            <span class="badge badge-malicious">{{ conn.port }}</span>
+                                            <span class="badge-malicious">{{ conn.port }}</span>
                                             {% else %}
                                             {{ conn.port }}
                                             {% endif %}
@@ -421,26 +764,25 @@
                                         <td>
                                             {% if conn in suspicious_established %}
                                                 {% if 'malicious IP' in conn.reason %}
-                                                <span class="badge badge-malicious">Malicious IP</span>
+                                                <span class="badge-malicious">Malicious IP</span>
                                                 {% else %}
-                                                <span class="badge badge-suspicious">Suspicious Port</span>
+                                                <span class="badge-suspicious">Suspicious</span>
                                                 {% endif %}
                                             {% else %}
-                                            <span class="badge bg-success">Normal</span>
+                                            <span class="badge-normal">Normal</span>
                                             {% endif %}
                                         </td>
                                         <td>
+                                            {% if conn.pid %}
                                             <form action="{{ url_for('kill_process') }}" method="POST" class="d-inline">
-                                                {% for conn in established %}
                                                 <input type="hidden" name="pid" value="{{ conn.pid }}">
-                                                {% endfor %}
-
-                                                <button type="submit" class="btn btn-sm btn-outline-danger connection-action">
+                                                <button type="submit" class="btn btn-danger btn-action">
                                                     <i class="fas fa-skull me-1"></i> Kill
                                                 </button>
                                             </form>
-                                            {% if conn.remote.split(':')[0] in malicious_ips %}
-                                            <button class="btn btn-sm btn-outline-warning connection-action block-ip" 
+                                            {% endif %}
+                                            {% if conn.remote and conn.remote.split(':')[0] in malicious_ips %}
+                                            <button class="btn btn-warning btn-action block-ip" 
                                                     data-ip="{{ conn.remote.split(':')[0] }}">
                                                 <i class="fas fa-shield-alt me-1"></i> Block
                                             </button>
@@ -453,42 +795,132 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </main>
-        <footer class="py-4 bg-light mt-auto">
-            <div class="container-fluid px-4">
-                <div class="d-flex align-items-center justify-content-between small">
-                    <div class="text-muted">Copyright &copy; LinuxAV-Solutions {{ current_year }}</div>
-                    <div>
-                        <button class="btn btn-sm btn-primary" onclick="location.reload()">
-                            <i class="fas fa-sync-alt me-1"></i> Refresh
-                        </button>
-                    </div>
+
+                <!-- Footer -->
+                <div class="footer mt-4 d-flex justify-content-between align-items-center">
+                    <span>© 2026 LinuxAV-Solutions. All rights reserved.</span>
+                    <span>
+                        <i class="fas fa-code me-1"></i> Koosha Yeganeh
+                        <span class="mx-2">|</span>
+                        <i class="fas fa-shield-alt me-1"></i> Hermes v1.0.0
+                    </span>
                 </div>
             </div>
-        </footer>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/umd/simple-datatables.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Initialize tooltips
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize DataTables
-            new simpleDatatables.DataTable('#suspiciousPortsTable');
-            new simpleDatatables.DataTable('#suspiciousConnectionsTable');
-            new simpleDatatables.DataTable('#allPortsTable');
-            new simpleDatatables.DataTable('#allConnectionsTable');
-            
-            // Initialize Bootstrap tooltips
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl, {
-                    html: true
-                });
-            });
+        // Traffic Chart
+        const ctx = document.getElementById('trafficChart').getContext('2d');
+        
+        const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.2)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Now', '1m', '2m', '3m', '4m', '5m', '6m', '7m', '8m', '9m', '10m'],
+                datasets: [{
+                    label: 'Inbound Traffic',
+                    data: [45, 52, 38, 65, 48, 72, 55, 68, 42, 58, 35],
+                    borderColor: '#3b82f6',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Outbound Traffic',
+                    data: [30, 35, 42, 28, 55, 38, 45, 32, 50, 40, 25],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#10b981',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.4,
+                    fill: false
+                }, {
+                    label: 'Suspicious Traffic',
+                    data: [5, 8, 3, 12, 6, 15, 8, 10, 4, 7, 2],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#ef4444',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.4,
+                    fill: false,
+                    borderDash: [5, 5]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#64748b',
+                            boxWidth: 12,
+                            padding: 20,
+                            font: {
+                                size: 11,
+                                weight: '500'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#ffffff',
+                        borderColor: '#e2e8f0',
+                        borderWidth: 1,
+                        titleColor: '#1e293b',
+                        bodyColor: '#64748b',
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: true
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: '#f1f5f9',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            font: {
+                                size: 10
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: '#f1f5f9',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            color: '#94a3b8',
+                            font: {
+                                size: 10
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
         });
 
         // Block IP functionality
@@ -503,7 +935,8 @@
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonText: 'Block',
-                    cancelButtonText: 'Cancel'
+                    cancelButtonText: 'Cancel',
+                    confirmButtonColor: '#dc3545'
                 }).then((result) => {
                     if (result.isConfirmed) {
                         fetch('/firewall/block_ip', {
@@ -522,17 +955,20 @@
                             }
                         })
                         .catch(error => {
-                            Swal.fire('Error', 'Failed to block IP', 'error');
+                            Swal.fire('Error', 'Failed to block IP: ' + error, 'error');
                         });
                     }
                 });
             }
         });
 
-        // Auto-refresh every 60 seconds
-        setTimeout(function() {
-            location.reload();
-        }, 60000);
+        // Initialize tooltips
+        document.addEventListener('DOMContentLoaded', function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
     </script>
 </body>
 </html>
