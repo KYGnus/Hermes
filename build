@@ -1,0 +1,452 @@
+#!/bin/bash
+# build_deb.sh - Build Debian package for Hermes Malware Detection Tool
+# Simplified version that builds directly without complex Debian tools
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+PACKAGE_NAME="hermes"
+PACKAGE_VERSION="1.0.0"
+PACKAGE_RELEASE="1"
+MAINTAINER="Your Name <your.email@example.com>"
+DESCRIPTION="Hermes - Malware Detection and Analysis Tool"
+HOMEPAGE="https://github.com/yourusername/hermes"
+ARCH="all"
+
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to check system
+check_system() {
+    print_status "Checking system compatibility..."
+    
+    if ! command -v dpkg-deb &> /dev/null; then
+        print_error "dpkg-deb not found. Installing dpkg-dev..."
+        sudo apt-get install -y dpkg-dev
+    fi
+    
+    if ! command -v python3 &> /dev/null; then
+        print_error "python3 not found. Please install Python 3."
+        exit 1
+    fi
+    
+    print_success "System check passed"
+}
+
+# Function to create the package structure
+create_package_structure() {
+    print_status "Creating package structure..."
+    
+    # Clean previous builds
+    rm -rf hermes_* *.deb 2>/dev/null || true
+    
+    # Package directory name
+    PKG_DIR="${PACKAGE_NAME}_${PACKAGE_VERSION}-${PACKAGE_RELEASE}_${ARCH}"
+    
+    # Create directory structure
+    mkdir -p "${PKG_DIR}/DEBIAN"
+    mkdir -p "${PKG_DIR}/opt/hermes/app"
+    mkdir -p "${PKG_DIR}/opt/hermes/static"
+    mkdir -p "${PKG_DIR}/opt/hermes/templates"
+    mkdir -p "${PKG_DIR}/usr/local/bin"
+    mkdir -p "${PKG_DIR}/var/log/hermes"
+    mkdir -p "${PKG_DIR}/var/lib/hermes/quarantine"
+    mkdir -p "${PKG_DIR}/var/lib/hermes/tmp"
+    mkdir -p "${PKG_DIR}/etc/hermes"
+    
+    # Export PKG_DIR for other functions
+    export PKG_DIR
+    
+    print_success "Package structure created"
+}
+
+# Function to copy application files
+copy_app_files() {
+    print_status "Copying application files..."
+    
+    # Copy app directory contents
+    if [ -d "app" ]; then
+        # Copy all files from app directory
+        cp -r app/* "${PKG_DIR}/opt/hermes/app/" 2>/dev/null || true
+        
+        # Make sure main_linux.py is executable
+        if [ -f "${PKG_DIR}/opt/hermes/app/main_linux.py" ]; then
+            chmod +x "${PKG_DIR}/opt/hermes/app/main_linux.py"
+        fi
+        
+        # Also create a copy named hermes_main.py for consistency
+        if [ -f "app/main_linux.py" ]; then
+            cp app/main_linux.py "${PKG_DIR}/opt/hermes/app/hermes_main.py"
+            chmod +x "${PKG_DIR}/opt/hermes/app/hermes_main.py"
+        fi
+    else
+        print_warning "app directory not found"
+    fi
+    
+    # Copy static files if they exist
+    if [ -d "app/static" ]; then
+        cp -r app/static "${PKG_DIR}/opt/hermes/" 2>/dev/null || true
+    fi
+    
+    # Copy templates if they exist
+    if [ -d "app/templates" ]; then
+        cp -r app/templates "${PKG_DIR}/opt/hermes/" 2>/dev/null || true
+    fi
+    
+    # Copy root directory files
+    [ -f "requirements.txt" ] && cp requirements.txt "${PKG_DIR}/opt/hermes/"
+    [ -f "README.md" ] && cp README.md "${PKG_DIR}/opt/hermes/"
+    [ -f "LICENSE" ] && cp LICENSE "${PKG_DIR}/opt/hermes/"
+    [ -f "hermes.png" ] && cp hermes.png "${PKG_DIR}/opt/hermes/"
+    [ -f "malware_rules.yar" ] && cp malware_rules.yar "${PKG_DIR}/opt/hermes/"
+    [ -f "malware_ips.txt" ] && cp malware_ips.txt "${PKG_DIR}/opt/hermes/"
+    
+    # Create the wrapper script that will be linked to /usr/local/bin
+    print_status "Creating wrapper script..."
+    cat > "${PKG_DIR}/opt/hermes/hermes-wrapper" << 'EOF'
+#!/bin/bash
+# Hermes wrapper script
+
+# Set the application directory
+APP_DIR="/opt/hermes/app"
+MAIN_SCRIPT="main_linux.py"
+
+# Check if main_linux.py exists
+if [ -f "${APP_DIR}/${MAIN_SCRIPT}" ]; then
+    cd "${APP_DIR}"
+    exec python3 "${MAIN_SCRIPT}" "$@"
+elif [ -f "${APP_DIR}/hermes_main.py" ]; then
+    cd "${APP_DIR}"
+    exec python3 "hermes_main.py" "$@"
+else
+    echo "Error: Hermes main script not found in ${APP_DIR}"
+    exit 1
+fi
+EOF
+    
+    chmod +x "${PKG_DIR}/opt/hermes/hermes-wrapper"
+    
+    # Create symlink in /usr/local/bin pointing to the wrapper
+    ln -sf /opt/hermes/hermes-wrapper "${PKG_DIR}/usr/local/bin/hermes"
+    
+    print_success "Application files copied"
+}
+
+# Function to create control file
+create_control_file() {
+    print_status "Creating control file..."
+    
+    cat > "${PKG_DIR}/DEBIAN/control" << EOF
+Package: ${PACKAGE_NAME}
+Version: ${PACKAGE_VERSION}-${PACKAGE_RELEASE}
+Section: utils
+Priority: optional
+Architecture: ${ARCH}
+Maintainer: ${MAINTAINER}
+Depends: python3 (>= 3.6), python3-flask, python3-yara, python3-requests, python3-werkzeug
+Recommends: systemd
+Homepage: ${HOMEPAGE}
+Description: ${DESCRIPTION}
+ Hermes is a comprehensive malware detection and analysis application
+ that uses YARA rules to detect malicious patterns in files and network
+ traffic. Features include:
+  * Real-time file scanning with YARA rules
+  * Network traffic analysis
+  * Malware quarantine management
+  * Web-based administration interface
+  * Comprehensive logging
+EOF
+    
+    print_success "Control file created"
+}
+
+# Function to create post-installation script
+create_postinst_script() {
+    print_status "Creating post-installation script..."
+    
+    cat > "${PKG_DIR}/DEBIAN/postinst" << 'EOF'
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        echo "Configuring Hermes installation..."
+        
+        # Install Python dependencies
+        if [ -f /opt/hermes/requirements.txt ]; then
+            echo "Installing Python dependencies..."
+            pip3 install --no-cache-dir -r /opt/hermes/requirements.txt 2>/dev/null || echo "Warning: Some dependencies may not have installed"
+        fi
+        
+        # Create necessary directories
+        mkdir -p /var/log/hermes
+        mkdir -p /var/lib/hermes/quarantine
+        mkdir -p /var/lib/hermes/tmp
+        mkdir -p /etc/hermes
+        
+        # Set permissions
+        [ -f /opt/hermes/app/main_linux.py ] && chmod 755 /opt/hermes/app/main_linux.py
+        [ -f /opt/hermes/app/hermes_main.py ] && chmod 755 /opt/hermes/app/hermes_main.py
+        chmod 755 /opt/hermes/hermes-wrapper
+        chown -R root:root /opt/hermes 2>/dev/null || true
+        chown -R root:root /var/log/hermes 2>/dev/null || true
+        chown -R root:root /var/lib/hermes 2>/dev/null || true
+        
+        # Create log file
+        touch /var/log/hermes/hermes.log
+        chmod 644 /var/log/hermes/hermes.log
+        
+        # Update systemd if service exists
+        if [ -f /etc/systemd/system/hermes.service ]; then
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl enable hermes 2>/dev/null || true
+            systemctl start hermes 2>/dev/null || echo "Could not start service automatically"
+        fi
+        
+        echo ""
+        echo "Hermes installed successfully!"
+        echo "To start Hermes: hermes"
+        echo "Or run: python3 /opt/hermes/app/main_linux.py"
+        echo ""
+        ;;
+esac
+
+exit 0
+EOF
+    chmod +x "${PKG_DIR}/DEBIAN/postinst"
+    
+    print_success "Post-installation script created"
+}
+
+# Function to create pre-removal script
+create_prerm_script() {
+    print_status "Creating pre-removal script..."
+    
+    cat > "${PKG_DIR}/DEBIAN/prerm" << 'EOF'
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove|deconfigure)
+        # Stop service if running
+        if systemctl is-active --quiet hermes 2>/dev/null; then
+            systemctl stop hermes 2>/dev/null || true
+        fi
+        ;;
+esac
+
+exit 0
+EOF
+    chmod +x "${PKG_DIR}/DEBIAN/prerm"
+    
+    print_success "Pre-removal script created"
+}
+
+# Function to create post-removal script
+create_postrm_script() {
+    print_status "Creating post-removal script..."
+    
+    cat > "${PKG_DIR}/DEBIAN/postrm" << 'EOF'
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        echo "Removing Hermes configuration and data..."
+        rm -rf /var/log/hermes 2>/dev/null || true
+        rm -rf /var/lib/hermes 2>/dev/null || true
+        rm -rf /etc/hermes 2>/dev/null || true
+        ;;
+esac
+
+exit 0
+EOF
+    chmod +x "${PKG_DIR}/DEBIAN/postrm"
+    
+    print_success "Post-removal script created"
+}
+
+# Function to create md5sums
+create_md5sums() {
+    print_status "Creating MD5 checksums..."
+    
+    cd "${PKG_DIR}"
+    find . -type f ! -path "./DEBIAN/*" -exec md5sum {} \; > DEBIAN/md5sums 2>/dev/null || true
+    cd - > /dev/null
+    
+    print_success "MD5 checksums created"
+}
+
+# Function to build the package
+build_package() {
+    print_status "Building Debian package..."
+    
+    # Build the package
+    dpkg-deb --build "${PKG_DIR}" 2>&1 | grep -v "warning" || true
+    
+    if [ -f "${PKG_DIR}.deb" ]; then
+        # Rename to the correct format
+        mv "${PKG_DIR}.deb" "${PACKAGE_NAME}_${PACKAGE_VERSION}-${PACKAGE_RELEASE}_${ARCH}.deb"
+        print_success "Package built successfully: ${PACKAGE_NAME}_${PACKAGE_VERSION}-${PACKAGE_RELEASE}_${ARCH}.deb"
+    else
+        print_error "Build failed"
+        exit 1
+    fi
+}
+
+# Function to create systemd service file (optional)
+create_systemd_service() {
+    print_status "Creating systemd service file..."
+    
+    mkdir -p "${PKG_DIR}/etc/systemd/system"
+    
+    cat > "${PKG_DIR}/etc/systemd/system/hermes.service" << EOF
+[Unit]
+Description=Hermes Malware Detection Service
+Documentation=${HOMEPAGE}
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/hermes/app
+ExecStart=/usr/bin/python3 /opt/hermes/app/main_linux.py
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hermes
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    # Also create a copy in the current directory for reference
+    cp "${PKG_DIR}/etc/systemd/system/hermes.service" . 2>/dev/null || true
+    
+    print_success "Systemd service file created"
+}
+
+# Function to display package info
+display_package_info() {
+    local DEB_FILE="${PACKAGE_NAME}_${PACKAGE_VERSION}-${PACKAGE_RELEASE}_${ARCH}.deb"
+    
+    if [ -f "$DEB_FILE" ]; then
+        echo ""
+        echo -e "${GREEN}=====================================${NC}"
+        echo -e "${GREEN}   Package Build Successful!        ${NC}"
+        echo -e "${GREEN}=====================================${NC}"
+        echo ""
+        echo -e "Package: ${YELLOW}$DEB_FILE${NC}"
+        echo -e "Size: ${YELLOW}$(du -h $DEB_FILE | cut -f1)${NC}"
+        echo ""
+        echo -e "${BLUE}Package Contents:${NC}"
+        dpkg --contents "$DEB_FILE" 2>/dev/null | head -20
+        echo "  ..."
+        echo ""
+        echo -e "${GREEN}=====================================${NC}"
+        echo -e "${YELLOW}Installation Instructions:${NC}"
+        echo ""
+        echo "1. Install the package:"
+        echo "   sudo dpkg -i $DEB_FILE"
+        echo ""
+        echo "2. Fix dependencies (if any):"
+        echo "   sudo apt-get install -f"
+        echo ""
+        echo "3. Start Hermes:"
+        echo "   hermes"
+        echo ""
+        echo "   Or if systemd service was installed:"
+        echo "   sudo systemctl start hermes"
+        echo "   sudo systemctl status hermes"
+        echo ""
+        echo "4. Check logs:"
+        echo "   tail -f /var/log/hermes/hermes.log"
+        echo ""
+        echo "5. Remove the package:"
+        echo "   sudo dpkg -r hermes"
+        echo ""
+        echo "6. Purge all files:"
+        echo "   sudo dpkg -P hermes"
+        echo ""
+        echo -e "${GREEN}=====================================${NC}"
+    fi
+}
+
+# Function to clean up
+cleanup() {
+    print_status "Cleaning up temporary files..."
+    rm -rf "${PKG_DIR}" 2>/dev/null || true
+    print_success "Cleanup complete"
+}
+
+# Main function
+main() {
+    echo -e "${GREEN}=====================================${NC}"
+    echo -e "${GREEN}   Hermes .deb Package Builder      ${NC}"
+    echo -e "${GREEN}   Version ${PACKAGE_VERSION}              ${NC}"
+    echo -e "${GREEN}=====================================${NC}"
+    echo ""
+    
+    # Check system
+    check_system
+    
+    # Create package structure
+    create_package_structure
+    
+    # Copy files
+    copy_app_files
+    
+    # Create control and scripts
+    create_control_file
+    create_postinst_script
+    create_prerm_script
+    create_postrm_script
+    
+    # Create systemd service (optional)
+    create_systemd_service
+    
+    # Create md5sums
+    create_md5sums
+    
+    # Build the package
+    build_package
+    
+    # Display package info
+    display_package_info
+    
+    # Cleanup
+    cleanup
+    
+    echo ""
+    print_success "Build completed successfully!"
+}
+
+# Run main function
+main

@@ -1,9 +1,18 @@
-
 # Hermes
 
 A Flask-based web application to manage and monitor security on remote Linux servers via SSH from both Linux and Windows systems.
 
-![hermes](hermes.png)
+<div align="center">
+  <img src="./images/hermes2.png" width="30%" alt="Antivirus"/>
+  <img src="./images/hermes3.png" width="30%" alt="Processes"/>
+  <br/>
+  <img src="./images/hermes4.png" width="30%" alt="Network"/>
+  <img src="./images/hermes8.png" width="30%" alt="Logs"/>
+  <img src="./images/hermes9.png" width="30%" alt="Services"/>
+  <br/>
+  <img src="./images/hermes10.png" width="30%" alt="Firewall"/>
+  <img src="./images/hermes12.png" width="30%" alt="Kernel"/>
+</div>
 
 ## Features
 
@@ -172,4 +181,5 @@ FAIL2BAN_JAILS = ['ssh', 'apache', 'nginx']
 ## Contributing
 
 Contributions are welcome! Please open an issue or pull request for any bugs or feature requests.
+
 
