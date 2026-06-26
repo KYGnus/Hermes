@@ -317,7 +317,7 @@
                 </div>
                 
                 <nav class="nav flex-column">
-                    <div class="nav-item">
+                    <div class="nav-item active">
                         <a class="nav-link" href="{{ url_for('dashboard') }}">
                             <i class="fas fa-th-large"></i>Dashboard
                         </a>
@@ -359,27 +359,15 @@
                         </a>
                     </div>
                     
-                    <div class="nav-item active">
-                        <a class="nav-link" href="{{ url_for('manage_kernel_modules') }}">
-                            <i class="fas fa-cogs"></i>Kernel
-                        </a>
-                    </div>
-                    
                     <div class="nav-item">
-                        <a class="nav-link" href="{{ url_for('file_integrity') }}">
-                            <i class="fas fa-file-alt"></i>File Integrity
+                        <a class="nav-link active" href="{{ url_for('manage_kernel_modules') }}">
+                            <i class="fas fa-cogs"></i>Kernel
                         </a>
                     </div>
                     
                     <div class="nav-item mt-4">
                         <a class="nav-link" href="{{ url_for('configure_ssh') }}">
                             <i class="fas fa-terminal"></i>SSH Config
-                        </a>
-                    </div>
-                    
-                    <div class="nav-item">
-                        <a class="nav-link" href="{{ url_for('log_management') }}">
-                            <i class="fas fa-database"></i>Logs
                         </a>
                     </div>
                     
@@ -397,6 +385,7 @@
                     </div>
                 </div>
             </div>
+            
             
             <!-- Main Content -->
             <div class="col main-content">
