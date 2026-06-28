@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Analysis Report - Hermes</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                background-image: 
+                linear-gradient(to bottom, rgba(16, 20, 30, 0.4) 0%, rgba(8, 10, 15, 0.75) 100%),
+                url('../static/Minimalist\ Desktop\ Wallpaper_20260514_160948_0000.png');
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+    
+    }
+        .header { 
+            background: rgba(255, 255, 255, 0.03); 
+            backdrop-filter: blur(25px) saturate(190%);
+            -webkit-backdrop-filter: blur(25px) saturate(190%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 24px; 
+            text-align: center; 
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 4px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.65);
+        }
+        .container { max-width: 70%; margin: 20px auto; padding: 20px; }
+        
+        .card { 
+            background: #1c1c1e; 
+            border-radius: 10px; 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); 
+        }
+
+        .summary { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
+            gap: 15px; 
+        }
+        
+        .summary-card { 
+            background: #2c2c2e; 
+            padding: 15px; 
+            border-radius: 8px; 
+            text-align: center; 
+        }
+        
+        .summary-card .number { font-size: 28px; font-weight: bold; }
+        .summary-card .label { font-size: 12px; color: #8e8e93; margin-top: 5px; }
+        
+        .badge { padding: 3px 10px; border-radius: 15px; font-size: 12px; display: inline-block; }
+        .badge-critical { background: #ff453a; color: white; }
+        .badge-high { background: #ff9f0a; color: white; }
+        .badge-medium { background: #ffd60a; color: black; }
+        .badge-low { background: #32d74b; color: white; }
+        .badge-passed { background: #32d74b; color: white; }
+        .badge-failed { background: #ff453a; color: white; }
+        .badge-warning { background: #ffd60a; color: black; }
+        .badge-safe { background: #8e8e93; color: white; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; color: #ffffff; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #3a3a3c; }
+        th { background: #2c2c2e; position: sticky; top: 0; }
+        tr:hover { background: #2c2c2e; }
+        
+        .nav { display: flex; gap: 15px; justify-content: center; margin: 15px 0; flex-wrap: wrap; }
+        .nav a { color: white; text-decoration: none; padding: 8px 16px; background: rgba(255,255,255,0.1); border-radius: 5px; }
+        .nav a:hover { background: rgba(255,255,255,0.2); }
+        
+        .btn { display: inline-block; padding: 10px 20px; background: #007aff; color: white; border: none; border-radius: 5px; text-decoration: none; }
+        .btn:hover { background: #0056b3; }
+        .btn-success { background: #32d74b; }
+        .btn-success:hover { background: #24a13d; }
+        .btn-danger { background: #ff453a; }
+        .btn-danger:hover { background: #c12b1a; }
+        
+        .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+        code { background: #2c2c2e; padding: 2px 6px; border-radius: 3px; font-size: 13px; color: #e5e5e7; }
+        
+        .footer { text-align: center; color: #8e8e93; margin-top: 30px; padding-top: 20px; border-top: 1px solid #3a3a3c; }
+        .empty { text-align: center; padding: 40px; color: #8e8e93; }
+        
+        .risk-score { font-size: 24px; font-weight: bold; }
+        .risk-critical { color: #ff453a; }
+        .risk-high { color: #ff9f0a; }
+        .risk-medium { color: #ffd60a; }
+        .risk-low { color: #32d74b; }
+        
+        .scrollable { max-height: 500px; overflow-y: auto; }
+        .service-name { font-family: monospace; }
+        .process-command { font-family: monospace; font-size: 12px; }
+        .reason-list { font-size: 12px; color: #8e8e93; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+
+    <h1>Hermes Security Analysis Report</h1>
+        <p>Report ID: {{ report_id }}</p>
+        <p>Date: {{ timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        {% if results.system_info %}
+        <p>System: {{ results.system_info.hostname|default('Unknown') }}</p>
+        {% endif %}
+        <div class="nav">
+            <a href="{{ url_for('dashboard') }}">🏠 Dashboard</a>
+            <a href="{{ url_for('view_report') }}">📊 Active Report</a>
+            <a href="{{ url_for('list_reports') }}">📁 Saved Reports</a>
+            <a href="{{ url_for('logout') }}">🚪 Sign Out</a>
+        </div>
+    </div>
+    <div class="container">
+        {% if results %}
+            {% if results.system_info %}
+            <div class="card">
+                <h3 style="color:white;">🖥️ System Information</h3>
+                <table>
+                    {% for key, value in results.system_info.items() %}
+                    <tr>
+                        <td><strong>{{ key }}</strong></td>
+                        <td>{{ value|default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            {% endif %}
+
+            <div class="card">
+                <h3 style="color:white;">📊 Analysis Summary</h3>
+                <div class="summary">
+                    {% if results.vulnerabilities and results.vulnerabilities.summary %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.vulnerabilities.summary.critical|default(0) }}</div>
+                        <div class="label">Critical Vulnerabilities</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff9f0a;">{{ results.vulnerabilities.summary.high|default(0) }}</div>
+                        <div class="label">High Vulnerabilities</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.ports and results.ports.statistics %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.ports.statistics.critical|default(0) }}</div>
+                        <div class="label">Critical Ports</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff9f0a;">{{ results.ports.risk_score|default(0) }}</div>
+                        <div class="label" style="color:white">Port Risk Score</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.services and results.services.summary %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.services.summary.critical|default(0) }}</div>
+                        <div class="label">Critical Services</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff9f0a;">{{ results.services.summary.suspicious|default(0) }}</div>
+                        <div class="label">Suspicious Services</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.processes and results.processes.summary %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.processes.summary.suspicious|default(0) }}</div>
+                        <div class="label">Suspicious Processes</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.kernel_modules and results.kernel_modules.summary %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.kernel_modules.summary.suspicious|default(0) }}</div>
+                        <div class="label">Suspicious Modules</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff9f0a;">{{ results.kernel_modules.summary.unsigned|default(0) }}</div>
+                        <div class="label">Unsigned Modules</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.software and results.software.summary %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.software.summary.suspicious|default(0) }}</div>
+                        <div class="label">Suspicious Software</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff9f0a;">{{ results.software.summary.remote_access|default(0) }}</div>
+                        <div class="label">Remote Access Software</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.users and results.users.summary %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.users.summary.suspicious|default(0) }}</div>
+                        <div class="label">Suspicious Users</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff9f0a;">{{ results.users.summary.root|default(0) }}</div>
+                        <div class="label">Root Users</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if results.hardening and results.hardening.summary %}
+                    <div class="summary-card">
+                        <div class="number" style="color: #32d74b;">{{ results.hardening.summary.passed|default(0) }}</div>
+                        <div class="label">Passed Checks</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="number" style="color: #ff453a;">{{ results.hardening.summary.failed|default(0) }}</div>
+                        <div class="label">Failed Checks</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if results.vulnerabilities and results.vulnerabilities.cves %}
+            <div class="card">
+                <div class="section-title">
+                    <h3 style="color:white;">🔍 Detected Vulnerabilities</h3>
+                   <span style="color:white;">Count: {{ results.vulnerabilities.cves|length }}</span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>ID</th>
+                            <th>Severity</th>
+                            <th>Score</th>
+                            <th>Description</th>
+                        </tr>
+                        {% for cve in results.vulnerabilities.cves[:50] %}
+                        <tr>
+                            <td><a href="https://nvd.nist.gov/vuln/detail/{{ cve.id }}" target="_blank">{{ cve.id }}</a></td>
+                            <td>
+                                <span class="badge 
+                                    {% if cve.severity == 'CRITICAL' %}badge-critical
+                                    {% elif cve.severity == 'HIGH' %}badge-high
+                                    {% elif cve.severity == 'MEDIUM' %}badge-medium
+                                    {% elif cve.severity == 'LOW' %}badge-low
+                                    {% else %}badge-warning{% endif %}">
+                                    {{ cve.severity|default('UNKNOWN') }}
+                                </span>
+                            </td>
+                            <td>{{ cve.score|default(0) }}</td>
+                            <td>{{ cve.description|truncate(100) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+                {% if results.vulnerabilities.cves|length > 50 %}
+                <p style="margin-top: 10px; color: #8e8e93;">... and {{ results.vulnerabilities.cves|length - 50 }} more</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if results.ports and results.ports.open_ports %}
+            <div class="card">
+                <div class="section-title">
+                    <h3 style="color:white;">🌐 Open Ports</h3>
+                    <span style="color:cyan;">Risk Score: <span class="risk-{{ 'critical' if results.ports.risk_score > 50 else 'high' if results.ports.risk_score > 30 else 'medium' if results.ports.risk_score > 10 else 'low' }}">{{ results.ports.risk_score|default(0) }}</span></span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>Port</th>
+                            <th>Protocol</th>
+                            <th>Service</th>
+                            <th>Process</th>
+                            <th>Risk</th>
+                            <th>Recommendation</th>
+                        </tr>
+                        {% for port in results.ports.open_ports[:100] %}
+                        <tr>
+                            <td><strong>{{ port.port }}</strong></td>
+                            <td>{{ port.protocol }}</td>
+                            <td>{{ port.service }}</td>
+                            <td><code>{{ port.process }}</code></td>
+                            <td>
+                                <span class="badge 
+                                    {% if port.risk == 'Critical' %}badge-critical
+                                    {% elif port.risk == 'High' %}badge-high
+                                    {% elif port.risk == 'Medium' %}badge-medium
+                                    {% else %}badge-low{% endif %}">
+                                    {{ port.risk }}
+                                </span>
+                            </td>
+                            <td>{{ port.recommendation }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+                {% if results.ports.open_ports|length > 100 %}
+                <p style="margin-top: 10px; color: #8e8e93;">... and {{ results.ports.open_ports|length - 100 }} more ports</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if results.ports and results.ports.suspicious_ports %}
+            <div class="card" style="border-right: 4px solid #ff453a;">
+                <div class="section-title">
+                    <h3 style="color:white;">🚨 Suspicious Ports</h3>
+                   <span style="color:white;">Count: {{ results.ports.suspicious_ports|length }}</span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>Port</th>
+                            <th>Protocol</th>
+                            <th>Service</th>
+                            <th>Process</th>
+                            <th>Risk</th>
+                            <th>Recommendation</th>
+                        </tr>
+                        {% for port in results.ports.suspicious_ports %}
+                        <tr>
+                            <td><strong>{{ port.port }}</strong></td>
+                            <td>{{ port.protocol }}</td>
+                            <td>{{ port.service }}</td>
+                            <td><code>{{ port.process }}</code></td>
+                            <td><span class="badge badge-critical">{{ port.risk }}</span></td>
+                            <td>{{ port.recommendation }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if results.services and results.services.suspicious %}
+            <div class="card" style="border-right: 4px solid #ff453a;">
+                <div class="section-title">
+                    <h3 style="color:white;">⚙️ Suspicious Services</h3>
+                   <span style="color:white;">Count: {{ results.services.suspicious|length }}</span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>Service Name</th>
+                            <th>State</th>
+                            <th>Severity</th>
+                            <th>Reasons</th>
+                            <th>Path</th>
+                        </tr>
+                        {% for svc in results.services.suspicious %}
+                        <tr>
+                            <td><code class="service-name">{{ svc.service }}</code></td>
+                            <td>{{ svc.state }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if svc.severity == 'Critical' %}badge-critical
+                                    {% elif svc.severity == 'High' %}badge-high
+                                    {% elif svc.severity == 'Medium' %}badge-medium
+                                    {% else %}badge-warning{% endif %}">
+                                    {{ svc.severity }}
+                                </span>
+                            </td>
+                            <td>
+                                <ul style="list-style: none; padding: 0; margin: 0;">
+                                    {% for reason in svc.reasons %}
+                                    <li style="font-size: 12px; color: #8e8e93;">• {{ reason }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                            <td><code>{{ svc.fragment|default('N/A') }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if results.processes and results.processes.suspicious_processes %}
+            <div class="card" style="border-right: 4px solid #ff453a;">
+                <div class="section-title">
+                    <h3 style="color:white;">🧩 Suspicious Processes</h3>
+                   <span style="color:white;">Count: {{ results.processes.suspicious_processes|length }}</span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>PID</th>
+                            <th>User</th>
+                            <th>CPU%</th>
+                            <th>MEM%</th>
+                            <th>Command</th>
+                            <th>Reason</th>
+                        </tr>
+                        {% for proc in results.processes.suspicious_processes[:50] %}
+                        <tr>
+                            <td><strong>{{ proc.pid }}</strong></td>
+                            <td>{{ proc.user }}</td>
+                            <td {% if proc.cpu > 70 %}style="color: #ff453a; font-weight: bold;"{% endif %}>
+                                {{ proc.cpu|round(1) }}%
+                            </td>
+                            <td {% if proc.mem > 60 %}style="color: #ff453a; font-weight: bold;"{% endif %}>
+                                {{ proc.mem|round(1) }}%
+                            </td>
+                            <td><code class="process-command">{{ proc.command }}</code></td>
+                            <td class="reason-list">{{ proc.reason|truncate(80) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+                {% if results.processes.suspicious_processes|length > 50 %}
+                <p style="margin-top: 10px; color: #8e8e93;">... and {{ results.processes.suspicious_processes|length - 50 }} more</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if results.kernel_modules and results.kernel_modules.suspicious_modules %}
+            <div class="card" style="border-right: 4px solid #ff453a;">
+                <div class="section-title">
+                    <h3 style="color:white;">🧠 Suspicious Kernel Modules</h3>
+                   <span style="color:white;">Count: {{ results.kernel_modules.suspicious_modules|length }}</span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>Module Name</th>
+                            <th>Path</th>
+                            <th>Signature</th>
+                            <th>Reasons</th>
+                        </tr>
+                        {% for mod in results.kernel_modules.suspicious_modules %}
+                        <tr>
+                            <td><code>{{ mod.name }}</code></td>
+                            <td><code>{{ mod.path|default('N/A') }}</code></td>
+                            <td>
+                                <span style = "color:white;" class="badge {% if mod.signature == 'Signed' %}badge-passed{% else %}badge-critical{% endif %}">
+                                    {{ mod.signature|default('Unknown') }}
+                                </span>
+                            </td>
+                            <td>
+                                <ul style="list-style: none; padding: 0; margin: 0;">
+                                    {% for reason in mod.reasons %}
+                                    <li style="font-size: 12px; color: #8e8e93;">• {{ reason }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if results.software and results.software.suspicious_packages %}
+            <div class="card" style="border-right: 4px solid #ff453a;">
+                <div class="section-title">
+                    <h3 style="color:white;">📦 Suspicious Software</h3>
+                   <span style="color:white;">Count: {{ results.software.suspicious_packages|length }}</span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>Package Name</th>
+                            <th>Version</th>
+                            <th>Category</th>
+                            <th>Reasons</th>
+                        </tr>
+                        {% for pkg in results.software.suspicious_packages %}
+                        <tr>
+                            <td><code>{{ pkg.name }}</code></td>
+                            <td>{{ pkg.version }}</td>
+                            <td>
+                                <span class="badge badge-critical">{{ pkg.category|default('Suspicious') }}</span>
+                            </td>
+                            <td>
+                                <ul style="list-style: none; padding: 0; margin: 0;">
+                                    {% for reason in pkg.reasons %}
+                                    <li style="font-size: 12px; color: #8e8e93;">• {{ reason }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if results.users and results.users.suspicious_users %}
+            <div class="card" style="border-right: 4px solid #ff453a;">
+                <div class="section-title">
+                    <h3 style="color:white;">👤 Suspicious Users</h3>
+                   <span style="color:white;">Count: {{ results.users.suspicious_users|length }}</span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>Username</th>
+                            <th>UID</th>
+                            <th>Shell</th>
+                            <th>Home</th>
+                            <th>Sudo</th>
+                            <th>Reasons</th>
+                        </tr>
+                        {% for user in results.users.suspicious_users %}
+                        <tr>
+                            <td><strong>{{ user.username }}</strong></td>
+                            <td>{{ user.uid }}</td>
+                            <td><code>{{ user.shell }}</code></td>
+                            <td><code>{{ user.home }}</code></td>
+                            <td>{{ '✅' if user.sudo else '❌' }}</td>
+                            <td class="reason-list">{{ user.reasons }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if results.hardening and results.hardening.checks %}
+            <div class="card">
+                <div class="section-title">
+                    <h3 style="color:white;">🛡️ Hardening Status</h3>
+                    <span style="color: white;;">
+                        ✅ Passed: {{ results.hardening.summary.passed|default(0) }} | 
+                        ❌ Failed: {{ results.hardening.summary.failed|default(0) }} | 
+                        ⚠️ Warning: {{ results.hardening.summary.warning|default(0) }}
+                    </span>
+                </div>
+                <div class="scrollable">
+                    <table>
+                        <tr>
+                            <th>Check</th>
+                            <th>Result</th>
+                            <th>Expected</th>
+                            <th>Status</th>
+                            <th>Critical</th>
+                        </tr>
+                        {% for check in results.hardening.checks %}
+                        <tr>
+                            <td>{{ check.name }}</td>
+                            <td><code>{{ check.result|truncate(50) }}</code></td>
+                            <td><code>{{ check.expected }}</code></td>
+                            <td>
+                                <span class="badge 
+                                    {% if check.status == 'passed' %}badge-passed
+                                    {% elif check.status == 'failed' or check.status == 'failed (critical)' %}badge-critical
+                                    {% else %}badge-warning{% endif %}">
+                                    {{ check.status }}
+                                </span>
+                            </td>
+                            <td>{{ '✅' if check.critical else '❌' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px; flex-wrap: wrap;">
+                <a href="{{ url_for('dashboard') }}" class="btn">🏠 Back to Dashboard</a>
+                <a href="{{ url_for('export_report', report_id=report_id) }}" class="btn" style="background: #8e8e93;">📥 Download JSON</a>
+                <a href="{{ url_for('run_analysis') }}" class="btn btn-success">🔄 Re-analyze</a>
+            </div>
+
+        {% else %}
+            <div class="card empty">
+                <p>📭 No data available to display</p>
+                <p style="margin-top: 10px;">Please run an analysis first</p>
+                <a href="{{ url_for('run_analysis') }}" class="btn btn-success" style="margin-top: 15px;">🚀 Start Analysis</a>
+            </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>Generated by Hermes Security Analyzer - Version 3.0</p>
+            <p style="font-size: 12px;">This report is for analytical purposes only and does not apply any changes to the system</p>
+        </div>
+    </div>
+</body>
+</html>

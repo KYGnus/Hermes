@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hermes Security Analyzer</title>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            /* Apple visionOS Spatial Background Setup */
+            background-image: 
+                linear-gradient(to bottom, rgba(16, 20, 30, 0.4) 0%, rgba(8, 10, 15, 0.75) 100%),
+                url('../static/Minimalist\ Desktop\ Wallpaper_20260514_160948_0000.png');
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            color: #ffffff;
+            min-height: 100vh;
+            padding-bottom: 40px;
+        }
+
+        /* visionOS Frosted Glass Header */
+        .header { 
+            background: rgba(255, 255, 255, 0.03); 
+            backdrop-filter: blur(25px) saturate(190%);
+            -webkit-backdrop-filter: blur(25px) saturate(190%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 24px; 
+            text-align: center; 
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 4px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.65);
+        }
+
+        .container { 
+            max-width: 70%; 
+            margin: 40px auto; 
+            padding: 0 20px; 
+        }
+
+        /* Glassmorphic Cards with Spatial Depth */
+        .card { 
+            background: rgba(255, 255, 255, 0.05); 
+            backdrop-filter: blur(35px) saturate(160%);
+            -webkit-backdrop-filter: blur(35px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 24px; 
+            padding: 30px; 
+            margin-bottom: 24px; 
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3), 
+                        inset 0 1px 1px rgba(255, 255, 255, 0.15);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
+        }
+
+        .card:hover {
+            transform: scale(1.015) translateY(-2px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.22);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45), 
+                        inset 0 1px 2px rgba(255, 255, 255, 0.25);
+        }
+
+        .card h2, .card h3 {
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            margin-bottom: 15px;
+        }
+
+        /* Vision Pro Pill-shaped Buttons */
+        .btn { 
+            display: inline-flex; 
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px 32px; 
+            font-size: 15px; 
+            font-weight: 600;
+            border-radius: 30px; 
+            cursor: pointer; 
+            text-decoration: none; 
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            border: none;
+        }
+
+        .btn-success { 
+            background: #ffffff; 
+            color: #000000; 
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-success:hover { 
+            background: rgba(255, 255, 255, 0.9);
+            transform: scale(1.04);
+            box-shadow: 0 6px 20px rgba(255, 255, 255, 0.4);
+        }
+
+        /* Client-Side UI Trigger States */
+        .btn-loading {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: rgba(255, 255, 255, 0.5) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: none !important;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+
+        /* Navigation Style */
+        .nav { 
+            display: flex; 
+            gap: 8px; 
+            justify-content: center; 
+            margin-top: 16px; 
+            flex-wrap: wrap; 
+        }
+
+        .nav a { 
+            color: #ffffff; 
+            text-decoration: none; 
+            padding: 8px 18px; 
+            background: rgba(255, 255, 255, 0.05); 
+            border-radius: 20px; 
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .nav a:hover { 
+            background: rgba(255, 255, 255, 0.15); 
+            transform: translateY(-1px);
+        }
+
+        /* Grid Features Layout */
+        .features { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+            gap: 16px; 
+            margin-top: 20px; 
+        }
+
+        .feature { 
+            background: rgba(255, 255, 255, 0.03); 
+            padding: 20px; 
+            border-radius: 16px; 
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.2s;
+        }
+
+        .feature:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .feature h3 { 
+            color: #ffffff; 
+            font-size: 15px; 
+            margin-bottom: 6px;
+        }
+
+        .feature p { 
+            color: rgba(255, 255, 255, 0.55); 
+            font-size: 13px; 
+            line-height: 1.4;
+        }
+
+        /* Alerts & Status Boxes */
+        .status { 
+            padding: 14px 24px; 
+            border-radius: 14px; 
+            margin: 20px 0; 
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+        }
+
+        .status-running { background: rgba(255, 204, 0, 0.12); color: #ffcc00; border: 1px solid rgba(255, 204, 0, 0.25); }
+        .status-complete { background: rgba(52, 199, 89, 0.12); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.25); }
+        .status-error { background: rgba(255, 59, 48, 0.12); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.25); }
+        
+        .status-complete a {
+            color: #ffffff;
+            text-decoration: underline;
+            margin-left: 5px;
+        }
+
+        /* Continuous Progress Ring (Server Side) */
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Instant Initializer Ring (Client Side Layout) */
+        .spatial-loader {
+            display: none; /* Hidden by default */
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top-color: #8b5cf6; /* visionOS Aurora Violet Purple Accent */
+            animation: spin 0.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Tables mimicking floating sheets */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 15px; 
+        }
+
+        td { 
+            padding: 14px; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06); 
+            font-size: 14px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        td strong {
+            color: rgba(255, 255, 255, 0.65);
+            font-weight: 500;
+        }
+
+        /* Notification Banners */
+        .flash-success, .flash-error, .flash-warning { 
+            padding: 16px; 
+            border-radius: 14px; 
+            margin-bottom: 20px; 
+            font-size: 14px;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+        }
+        .flash-success { background: rgba(52, 199, 89, 0.12); color: #34c759; border: 1px solid rgba(52, 199, 89, 0.2); }
+        .flash-error { background: rgba(255, 59, 48, 0.12); color: #ff3b30; border: 1px solid rgba(255, 59, 48, 0.2); }
+        .flash-warning { background: rgba(255, 204, 0, 0.12); color: #ffcc00; border: 1px solid rgba(255, 204, 0, 0.2); }
+
+        .footer-card {
+            text-align: center; 
+            color: rgba(255, 255, 255, 0.45); 
+            font-size: 13px;
+            line-height: 1.5;
+            background: rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛡️ Hermes Security Analyzer</h1>
+        <p>Remote System Security Analysis Dashboard</p>
+        <div class="nav">
+            <a href="{{ url_for('dashboard') }}">🏠 Dashboard</a>
+            <a href="{{ url_for('view_report') }}">📊 Active Report</a>
+            <a href="{{ url_for('list_reports') }}">📁 Saved Reports</a>
+            <a href="{{ url_for('logout') }}">🚪 Sign Out</a>
+        </div>
+    </div>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-{{ category }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card" style="text-align: center;">
+            <h2>System Security Evaluation</h2>
+            <p style="color: rgba(255, 255, 255, 0.6); margin: 10px 0 20px 0;">This module inspects the connected infrastructure for vulnerabilities, malicious assets, and systemic configurations.</p>
+            
+            <div id="statusContainer">
+                {% if session.get('analysis_status') == 'running' %}
+                    <div><div class="status status-running"><div class="spinner"></div> Active scanning procedures are processing...</div></div>
+                {% elif session.get('analysis_status') == 'complete' %}
+                    <div><div class="status status-complete">✅ Scan completed! <a href="{{ url_for('view_report') }}">View Report</a></div></div>
+                {% elif session.get('analysis_status') == 'error' %}
+                    <div><div class="status status-error">❌ An error occurred during runtime analysis</div></div>
+                {% endif %}
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <a href="{{ url_for('run_analysis') }}" id="scanButton" class="btn btn-success" onclick="triggerScanLoading(this)">
+                    <div class="spatial-loader" id="btnLoader"></div>
+                    <span id="btnText">🚀 Initialize Comprehensive Scan</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📋 Diagnostic Capabilities</h3>
+            <div class="features">
+                <div class="feature"><h3>🔍 Vulnerabilities (CVE)</h3><p>Cross-references live system assets against real-time global threat matrices.</p></div>
+                <div class="feature"><h3>🌐 Open Ports</h3><p>Maps active ingress vectors and generates associated environmental risk matrices.</p></div>
+                <div class="feature"><h3>⚙️ Core Services</h3><p>Evaluates processes and daemons using deep behavioral IOC blueprints.</p></div>
+                <div class="feature"><h3>🧩 Active Processes</h3><p>Monitors runtime architecture anomalies for resource exhaustion vectors.</p></div>
+                <div class="feature"><h3>🧠 Kernel Modules</h3><p>Scans the low-level operating system layers for potential rootkit hooks.</p></div>
+                <div class="feature"><h3>📦 Package Auditing</h3><p>Validates installed binary configurations via global Threat Intelligence networks.</p></div>
+                <div class="feature"><h3>👤 Identity Access</h3><p>Inspects provisioned privileges, user directory assignments, and permission roles.</p></div>
+                <div class="feature"><h3>🛡️ Hardening Diagnostics</h3><p>Assesses the physical-virtual state boundary to optimize defensive integrity.</p></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📊 Connected Node Information</h3>
+            <table>
+                <tr><td><strong>Remote Host:</strong></td><td>{{ config.SSH_HOST }}</td></tr>
+                <tr><td><strong>Target Port:</strong></td><td>{{ config.SSH_PORT }}</td></tr>
+                <tr><td><strong>Session Identity:</strong></td><td>{{ config.SSH_USERNAME }}</td></tr>
+            </table>
+        </div>
+
+        <div class="card footer-card">
+            <p>⚠️ Operational Notice: This agent acts exclusively as a non-intrusive diagnostic tool. It will modify no state parameters on target machinery.</p>
+            <p style="margin-top: 6px; color: rgba(255, 255, 255, 0.25);">v3.0 — Hermes Advanced Defensive Architecture</p>
+        </div>
+    </div>
+
+    <script>
+        function triggerScanLoading(buttonElement) {
+            // 1. Target sub elements inside our anchor node
+            const textNode = document.getElementById('btnText');
+            const loaderNode = document.getElementById('btnLoader');
+            const statusContainer = document.getElementById('statusContainer');
+
+            // 2. Add structural styling to indicate lock state
+            buttonElement.classList.add('btn-loading');
+            
+            // 3. Swap text contexts and unlock the hidden animated loader
+            textNode.innerText = "Configuring Nodes & Starting Scan...";
+            loaderNode.style.display = "inline-block";
+
+            // 4. Inject an immediate notification banner inside the interface panel
+            statusContainer.innerHTML = '<div><div class="status status-running"><div class="spinner"></div> Contacting remote node via SSH...</div></div>';
+        }
+    </script>
+</body>
+</html>
