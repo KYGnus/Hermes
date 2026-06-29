@@ -143,7 +143,7 @@ SESSION_PERMANENT = False
 PERMANENT_SESSION_LIFETIME = 3600
 
 # Paths
-LOG_DIR = '/tmp/Hermes'
+LOG_DIR = '/tmp/Hermes' # This is Linux Directory if You Use on windows chnage it to Local Folder
 REPORT_DIR = os.path.join(LOG_DIR, 'reports')
 
 # Cache Settings
@@ -225,52 +225,7 @@ The report is organized into logical sections:
 - CPU usage: Minimal (analysis is remote)
 - Concurrent connections: Up to 10 hosts
 
-## 📈 Roadmap
 
-### Future Enhancements
-- [ ] Kubernetes security analysis
-- [ ] Container runtime security
-- [ ] Cloud provider integration (AWS, Azure, GCP)
-- [ ] Compliance reporting (CIS, SOC2, PCI-DSS)
-- [ ] Real-time monitoring dashboard
-- [ ] Alerting and notification system
-- [ ] Scheduled scans and reports
-- [ ] Multi-tenancy support
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**SSH Connection Failed**
-```bash
-# Verify SSH credentials in settings.py
-# Test SSH manually:
-ssh username@host_ip -p port
-# Check if SSH server is running:
-sudo systemctl status sshd
-```
-
-**Permission Denied**
-```bash
-# Ensure SSH user has sudo privileges:
-sudo usermod -aG sudo username
-# Verify sudo permissions:
-sudo -l
-```
-
-**CVE Database Update Fails**
-```bash
-# Check internet connectivity
-# Manually update CVE database:
-python -c "from main import cve_db; cve_db.update()"
-```
-
-**Slow Scans**
-```bash
-# Increase SSH timeout in settings.py:
-SSH_CONNECTION_TIMEOUT = 30  # Default is 10
-# Use SSH keys instead of password
-```
 
 ### Logs
 Application logs are stored in:
@@ -300,8 +255,6 @@ GPL-3.0 License - See [LICENSE](LICENSE) for details
 
 - **KYGnus**
 - Contributions welcome!
-
-
 
 
 
